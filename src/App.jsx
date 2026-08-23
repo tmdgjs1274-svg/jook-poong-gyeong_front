@@ -197,7 +197,6 @@ export default function App() {
     }
   };
 
-  // --- 카테고리 관리 함수 수정 (선택된 가게 기준 등록) ---
   const handleAddCategory = async () => {
     if (!newCategoryInput) return;
     if (selectedMgmtStore === '전체') {
