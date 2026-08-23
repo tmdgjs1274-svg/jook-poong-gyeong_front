@@ -303,15 +303,16 @@ export default function App() {
   };
 
 const handleUpdateMenuModal = async () => {
-  const selectedCat = categories.find(c => c.id === Number(editingMenuModal.category_id));
-
-  await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, {
+  const payload = {
     name: editingMenuModal.name,
     price: editingMenuModal.price,
     store_tag: editingMenuModal.store_tag,
-    category_id: editingMenuModal.category_id === '' ? null : editingMenuModal.category_id,
-    category: selectedCat ? selectedCat.name : null
-  });
+    category_id: editingMenuModal.category_id === '' ? null : Number(editingMenuModal.category_id) // 숫자로 명시적 변환
+  };
+
+  console.log("보내는 데이터:", payload); // F12 개발자 도구 콘솔에서 확인
+
+  await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, payload);
   showToast('✅ 메뉴가 수정되었습니다.');
   setEditingMenuModal(null);
   fetchInitialData();
