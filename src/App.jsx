@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// 백엔드 API 기본 주소
-const API_BASE_URL = 'http://localhost:3000';
+// 💡 백엔드 배포 주소로 변경해주세요 (예: Render 백엔드 URL)
+// 만약 환경변수를 사용하신다면 import.meta.env.VITE_API_URL 등을 활용할 수도 있습니다.
+const API_BASE_URL = 'https://여기에-실제-배포된-백엔드-주소-입력';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('order'); // 'order', 'sales', 'menu', 'store'
@@ -290,7 +291,6 @@ export default function App() {
 
     setList(newList);
 
-    // 서버에 순서 변경 사항 일괄 저장 API 호출 또는 개별 업데이트
     try {
       const endpoint = type === 'store' ? 'store-tags' : 'order-types';
       await Promise.all(
@@ -307,7 +307,7 @@ export default function App() {
 
   const filteredMenus = menus.filter(m => m.store_tag_id === Number(selectedStoreTag));
 
-  // 일매출 필터링 적용 (가게, 배달, 결제수단 각각 쪼개진 필터)
+  // 일매출 필터링 적용
   const filteredDailyOrders = dailyOrders.filter(order => {
     const storeObj = storeTags.find(s => s.id === order.store_id);
     const storeName = storeObj ? storeObj.name : '';
@@ -517,7 +517,7 @@ export default function App() {
           <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
             <h3 style={{ marginTop: 0, textAlign: 'center', marginBottom: '20px' }}>{selectedDate} 매출 상세 정보</h3>
 
-            {/* 상단 필터 영역 (가게, 주문/배달, 결제수단 쪼개기 완료) */}
+            {/* 상단 필터 영역 */}
             <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', alignItems: 'center', flexWrap: 'wrap' }}>
               <div>
                 <span style={{ fontSize: '13px', fontWeight: 'bold', marginRight: '8px' }}>가게 구분:</span>
@@ -708,7 +708,7 @@ export default function App() {
         </div>
       )}
 
-      {/* [4] 가게/배달 관리 탭 (순서 변경 저장 기능 추가) */}
+      {/* [4] 가게/배달 관리 탭 */}
       {currentTab === 'store' && (
         <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
@@ -765,7 +765,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 주문 수정 모달 (할인 추가, 수량 변경 등 주문 입력과 동일한 기능 완벽 탑재) */}
+      {/* 주문 수정 모달 */}
       {editingOrder && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -783,7 +783,6 @@ export default function App() {
               </select>
             </div>
 
-            {/* 수정 모달 내 금액 할인 추가 기능 */}
             <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
               <label style={{ fontSize: '13px', color: '#495057', display: 'block', marginBottom: '5px' }}>할인/기타 항목 추가</label>
               <div style={{ display: 'flex', gap: '5px' }}>
