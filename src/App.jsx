@@ -17,10 +17,12 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   
-  // POS 화면: 기본 선택을 '전체' 대신 첫 번째 가게와 해당 가게의 첫 카테고리로 설정하기 위한 초기값 처리
+  // POS 화면: 기본 선택을 첫 번째 가게와 해당 가게의 첫 카테고리로 설정
   const [selectedPosStore, setSelectedPosStore] = useState('');
   const [selectedPosCategory, setSelectedPosCategory] = useState(''); 
-  const [selectedMgmtStore, setSelectedMgmtStore] = useState('전체');
+  const [selectedMgmtStore, setSelectedMgmtStore] = useState(''); // 초기값을 비워두어 첫 가게나 동적 제어
+  // 메뉴 관리 탭의 카테고리별 필터 state 추가
+  const [selectedMgmtCategory, setSelectedMgmtCategory] = useState('전체');
 
   // 일매출 정산 state
   const [dateList, setDateList] = useState([]);
@@ -74,12 +76,15 @@ export default function App() {
     }
   }, [activeTab, selectedDate]);
 
-  // 관리 탭의 가게 선택이 바뀔 때 해당 가게의 카테고리를 불러오도록 연동
+  // 관리 탭의 가게 선택이 바뀔 때 해당 가게의 카테고리를 불러오도록 연동 및 메뉴 관리 카테고리 필터 초기화
   useEffect(() => {
-    fetchCategories(selectedMgmtStore);
+    if (selectedMgmtStore) {
+      fetchCategories(selectedMgmtStore);
+      setSelectedMgmtCategory('전체');
+    }
   }, [selectedMgmtStore]);
 
-  // POS 화면에서 가게가 변경될 때 해당 가게의 카테고리 목록을 불러오고 기본 카테고리 자동 설정
+  // POS 화면에서 가게가 변경될 때 해당 가게의 카테고리 목록을 불러오고 기본 카테고리 자동 설정 ('카테고리 없음' 필터 제거 반영)
   useEffect(() => {
     if (selectedPosStore) {
       axios.get(`${API_BASE_URL}/categories?store_tag=${encodeURIComponent(selectedPosStore)}`)
@@ -89,7 +94,7 @@ export default function App() {
           if (fetchedCats.length > 0) {
             setSelectedPosCategory(fetchedCats[0].name);
           } else {
-            setSelectedPosCategory('카테고리 없음');
+            setSelectedPosCategory('');
           }
         })
         .catch(err => console.error('POS 카테고리 조회 실패:', err));
@@ -150,12 +155,17 @@ export default function App() {
       setStoreTags(stRes.data);
       setOrderTypes(otRes.data);
       
-      // 초기 가게 태그가 존재하면 POS 화면의 기본 선택 가게로 지정
-      if (stRes.data.length > 0 && !selectedPosStore) {
-        setSelectedPosStore(stRes.data[0].name);
+      if (stRes.data.length > 0) {
+        if (!selectedPosStore) setSelectedPosStore(stRes.data[0].name);
+        if (!selectedMgmtStore) setSelectedMgmtStore(stRes.data[0].name);
       }
 
-      fetchCategories(selectedMgmtStore);
+      if (selectedMgmtStore) {
+        fetchCategories(selectedMgmtStore);
+      } else if (stRes.data.length > 0) {
+        fetchCategories(stRes.data[0].name);
+      }
+
       if (otRes.data.length > 0 && !orderType) {
         setOrderType(otRes.data[0].id);
       }
@@ -251,7 +261,7 @@ export default function App() {
 
   const handleAddCategory = async () => {
     if (!newCategoryInput) return;
-    if (selectedMgmtStore === '전체') {
+    if (!selectedMgmtStore) {
       return alert('카테고리를 추가할 특정 가게를 먼저 선택해주세요!');
     }
 
@@ -337,7 +347,7 @@ export default function App() {
 
   const handleAddStoreTag = async () => {
     if (!newStoreInput) return;
-    await axios.post(`${API_BASE_URL}/store-tags`, { name: newStoreInput });
+    const res = await axios.post(`${API_BASE_URL}/store-tags`, { name: newStoreInput });
     setNewStoreInput('');
     showToast('가게 구분이 추가되었습니다.');
     fetchInitialData();
@@ -456,7 +466,8 @@ export default function App() {
   });
 
   return (
-    <div style={{ padding: '16px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333' }}>
+    // 너비를 최대로 활용하고 글자 깨짐 방지를 위해 width 100% 적용 및 여백 조정
+    <div style={{ width: '100%', minWidth: '1200px', margin: '0 auto', padding: '16px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
       
       {toastMessage && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', background: '#1e293b', color: '#fff', padding: '12px 20px', borderRadius: '8px', zIndex: 9999, fontWeight: 'bold' }}>
@@ -478,8 +489,8 @@ export default function App() {
 
       {/* 1. POS 영역 */}
       {activeTab === 'pos' && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 360px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'nowrap' }}>
+          <div style={{ width: '420px', flexShrink: 0, background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h2 style={{ margin: 0, fontSize: '18px' }}>주문 내역</h2>
               <button onClick={() => setIsDiscountModalOpen(true)} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
@@ -598,7 +609,7 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ flex: '3 1 500px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ flex: 1, background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
               {storeTags.map(tag => (
                 <button 
@@ -619,22 +630,8 @@ export default function App() {
               ))}
             </div>
 
+            {/* '카테고리 없음' 필터 버튼 삭제 완료 */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
-              <button 
-                onClick={() => setSelectedPosCategory('카테고리 없음')} 
-                style={{ 
-                  padding: '6px 14px', 
-                  borderRadius: '16px', 
-                  border: 'none', 
-                  cursor: 'pointer', 
-                  background: selectedPosCategory === '카테고리 없음' ? '#2563eb' : '#f1f5f9', 
-                  color: selectedPosCategory === '카테고리 없음' ? '#fff' : '#64748b', 
-                  fontWeight: 'bold', 
-                  fontSize: '13px' 
-                }}
-              >
-                카테고리 없음
-              </button>
               {categories.map(cat => (
                 <button 
                   key={cat.id} 
@@ -678,8 +675,8 @@ export default function App() {
 
       {/* 2. 일매출 정산 */}
       {activeTab === 'sales' && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 200px', maxWidth: '240px', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'nowrap' }}>
+          <div style={{ width: '220px', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <h3 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>일자 목록</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {dateList.map(date => (
@@ -690,7 +687,7 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ flex: '99 1 600px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ flex: 1, background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '20px' }}>{selectedDate} 매출 상세 정보</h2>
             
             <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', background: '#f8fafc', padding: '14px', borderRadius: '8px', flexWrap: 'wrap' }}>
@@ -805,16 +802,53 @@ export default function App() {
               <button onClick={() => setIsCategoryModalOpen(true)} style={{ padding: '10px 18px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                 🏷️ 카테고리 관리
               </button>
-              <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: '', category_id: '' }); setIsCreateModalOpen(true); }} style={{ padding: '10px 18px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+              <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: selectedMgmtStore || '', category_id: '' }); setIsCreateModalOpen(true); }} style={{ padding: '10px 18px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                 + 새 메뉴 등록
               </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button onClick={() => setSelectedMgmtStore('전체')} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === '전체' ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === '전체' ? '#fff' : '#64748b', fontWeight: 'bold' }}>전체 보기</button>
+          {/* 가게 구분 필터 ('전체 보기' 삭제 후 가게 버튼들만 제공) */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
             {storeTags.map(st => (
               <button key={st.id} onClick={() => setSelectedMgmtStore(st.name)} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === st.name ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === st.name ? '#fff' : '#64748b', fontWeight: 'bold' }}>{st.name}</button>
+            ))}
+          </div>
+
+          {/* 카테고리별로 볼 수 있는 필터 추가 ('전체보기' 필터 삭제 반영) */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <button 
+              onClick={() => setSelectedMgmtCategory('전체')} 
+              style={{ 
+                padding: '6px 12px', 
+                borderRadius: '16px', 
+                border: 'none', 
+                cursor: 'pointer', 
+                background: selectedMgmtCategory === '전체' ? '#0f172a' : '#f1f5f9', 
+                color: selectedMgmtCategory === '전체' ? '#fff' : '#64748b', 
+                fontWeight: 'bold', 
+                fontSize: '13px' 
+              }}
+            >
+              전체
+            </button>
+            {categories.map(cat => (
+              <button 
+                key={cat.id} 
+                onClick={() => setSelectedMgmtCategory(cat.name)} 
+                style={{ 
+                  padding: '6px 12px', 
+                  borderRadius: '16px', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  background: selectedMgmtCategory === cat.name ? '#0f172a' : '#f1f5f9', 
+                  color: selectedMgmtCategory === cat.name ? '#fff' : '#64748b', 
+                  fontWeight: 'bold', 
+                  fontSize: '13px' 
+                }}
+              >
+                {cat.name}
+              </button>
             ))}
           </div>
 
@@ -826,7 +860,12 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {menus.filter(m => selectedMgmtStore === '전체' || m.store_tag === selectedMgmtStore).map((m, idx) => (
+              {menus.filter(m => {
+                const storeMatch = !selectedMgmtStore || m.store_tag === selectedMgmtStore;
+                const menuCatName = m.categories?.name || '카테고리 없음';
+                const catMatch = selectedMgmtCategory === '전체' || menuCatName === selectedMgmtCategory;
+                return storeMatch && catMatch;
+              }).map((m, idx) => (
                 <tr 
                   key={m.id} 
                   draggable 
@@ -857,7 +896,7 @@ export default function App() {
 
       {/* 4. 가게/배달 관리 탭 */}
       {activeTab === 'categoryMgmt' && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'nowrap' }}>
           <div style={{ flex: 1, minWidth: '300px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <h3 style={{ marginTop: 0, fontSize: '16px' }}>가게 구분 관리</h3>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
