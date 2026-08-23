@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // 💡 백엔드 배포 주소로 변경해주세요 (예: Render 백엔드 URL)
 // 만약 환경변수를 사용하신다면 import.meta.env.VITE_API_URL 등을 활용할 수도 있습니다.
-const API_BASE_URL = 'https://여기에-실제-배포된-백엔드-주소-입력';
+const API_BASE_URL = 'https://jook-poong-gyeong.onrender.com';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('order'); // 'order', 'sales', 'menu', 'store'
