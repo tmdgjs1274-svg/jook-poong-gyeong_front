@@ -34,6 +34,7 @@ export default function App() {
   // 메뉴/카테고리 관리 state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newMenu, setNewMenu] = useState({ name: '', price: '', store_tag: '', category_id: '' });
+  const [modalCategories, setModalCategories] = useState([]); // 모달용 가게별 카테고리 state 추가
   const [editingMenuModal, setEditingMenuModal] = useState(null);
   const [newStoreInput, setNewStoreInput] = useState('');
   const [newOrderTypeInput, setNewOrderTypeInput] = useState('');
@@ -76,6 +77,22 @@ export default function App() {
     fetchCategories(selectedMgmtStore);
   }, [selectedMgmtStore]);
 
+  // 새 메뉴 등록 모달에서 가게가 바뀔 때 카테고리 조회
+  useEffect(() => {
+    if (newMenu.store_tag) {
+      fetchModalCategories(newMenu.store_tag);
+    } else {
+      setModalCategories([]);
+    }
+  }, [newMenu.store_tag]);
+
+  // 메뉴 수정 모달에서 가게가 바뀔 때 카테고리 조회
+  useEffect(() => {
+    if (editingMenuModal?.store_tag) {
+      fetchModalCategories(editingMenuModal.store_tag);
+    }
+  }, [editingMenuModal?.store_tag]);
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 2500);
@@ -90,6 +107,17 @@ export default function App() {
       setCategories(res.data);
     } catch (err) {
       console.error('카테고리 조회 실패:', err);
+    }
+  };
+
+  // 모달 전용 카테고리 조회 함수
+  const fetchModalCategories = async (storeTag) => {
+    try {
+      const url = `${API_BASE_URL}/categories?store_tag=${encodeURIComponent(storeTag)}`;
+      const res = await axios.get(url);
+      setModalCategories(res.data);
+    } catch (err) {
+      console.error('모달 카테고리 조회 실패:', err);
     }
   };
 
@@ -748,7 +776,11 @@ export default function App() {
                   <td style={{ fontWeight: 'bold' }}>{m.name}</td>
                   <td>{m.price.toLocaleString()}원</td>
                   <td>
-                    <button onClick={() => setEditingMenuModal({ ...m, category_id: m.categories?.id || m.category_id || '' })} style={{ marginRight: '6px', padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
+                    <button onClick={() => {
+                      const initialCatId = m.categories?.id || m.category_id || '';
+                      setEditingMenuModal({ ...m, category_id: initialCatId });
+                      if (m.store_tag) fetchModalCategories(m.store_tag);
+                    }} style={{ marginRight: '6px', padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
                     <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>삭제</button>
                   </td>
                 </tr>
@@ -1027,7 +1059,7 @@ export default function App() {
             <h3 style={{ marginTop: 0, marginBottom: '16px' }}>새 메뉴 등록</h3>
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
-              <select value={newMenu.store_tag} onChange={e => setNewMenu({ ...newMenu, store_tag: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
+              <select value={newMenu.store_tag} onChange={e => setNewMenu({ ...newMenu, store_tag: e.target.value, category_id: '' })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
                 <option value="">선택해주세요</option>
                 {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
@@ -1036,7 +1068,7 @@ export default function App() {
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
               <select value={newMenu.category_id} onChange={e => setNewMenu({ ...newMenu, category_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
                 <option value="">카테고리 없음</option>
-                {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                {modalCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: '12px' }}>
@@ -1062,7 +1094,7 @@ export default function App() {
             <h3 style={{ marginTop: 0, marginBottom: '16px' }}>메뉴 수정</h3>
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
-              <select value={editingMenuModal.store_tag} onChange={e => setEditingMenuModal({ ...editingMenuModal, store_tag: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
+              <select value={editingMenuModal.store_tag} onChange={e => setEditingMenuModal({ ...editingMenuModal, store_tag: e.target.value, category_id: '' })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
                 <option value="">선택해주세요</option>
                 {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
@@ -1071,7 +1103,7 @@ export default function App() {
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
               <select value={editingMenuModal.category_id} onChange={e => setEditingMenuModal({ ...editingMenuModal, category_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
                 <option value="">카테고리 없음</option>
-                {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                {modalCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: '12px' }}>
