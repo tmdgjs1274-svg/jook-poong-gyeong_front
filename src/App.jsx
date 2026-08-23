@@ -16,8 +16,10 @@ export default function App() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [selectedPosStore, setSelectedPosStore] = useState('전체');
-  const [selectedPosCategory, setSelectedPosCategory] = useState('전체'); 
+  
+  // POS 화면: 기본 선택을 '전체' 대신 첫 번째 가게와 해당 가게의 첫 카테고리로 설정하기 위한 초기값 처리
+  const [selectedPosStore, setSelectedPosStore] = useState('');
+  const [selectedPosCategory, setSelectedPosCategory] = useState(''); 
   const [selectedMgmtStore, setSelectedMgmtStore] = useState('전체');
 
   // 일매출 정산 state
@@ -34,7 +36,7 @@ export default function App() {
   // 메뉴/카테고리 관리 state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newMenu, setNewMenu] = useState({ name: '', price: '', store_tag: '', category_id: '' });
-  const [modalCategories, setModalCategories] = useState([]); // 모달용 가게별 카테고리 state 추가
+  const [modalCategories, setModalCategories] = useState([]); 
   const [editingMenuModal, setEditingMenuModal] = useState(null);
   const [newStoreInput, setNewStoreInput] = useState('');
   const [newOrderTypeInput, setNewOrderTypeInput] = useState('');
@@ -77,6 +79,23 @@ export default function App() {
     fetchCategories(selectedMgmtStore);
   }, [selectedMgmtStore]);
 
+  // POS 화면에서 가게가 변경될 때 해당 가게의 카테고리 목록을 불러오고 기본 카테고리 자동 설정
+  useEffect(() => {
+    if (selectedPosStore) {
+      axios.get(`${API_BASE_URL}/categories?store_tag=${encodeURIComponent(selectedPosStore)}`)
+        .then(res => {
+          const fetchedCats = res.data;
+          setCategories(fetchedCats);
+          if (fetchedCats.length > 0) {
+            setSelectedPosCategory(fetchedCats[0].name);
+          } else {
+            setSelectedPosCategory('카테고리 없음');
+          }
+        })
+        .catch(err => console.error('POS 카테고리 조회 실패:', err));
+    }
+  }, [selectedPosStore]);
+
   // 새 메뉴 등록 모달에서 가게가 바뀔 때 카테고리 조회
   useEffect(() => {
     if (newMenu.store_tag) {
@@ -110,7 +129,6 @@ export default function App() {
     }
   };
 
-  // 모달 전용 카테고리 조회 함수
   const fetchModalCategories = async (storeTag) => {
     try {
       const url = `${API_BASE_URL}/categories?store_tag=${encodeURIComponent(storeTag)}`;
@@ -131,6 +149,12 @@ export default function App() {
       setMenus(mRes.data);
       setStoreTags(stRes.data);
       setOrderTypes(otRes.data);
+      
+      // 초기 가게 태그가 존재하면 POS 화면의 기본 선택 가게로 지정
+      if (stRes.data.length > 0 && !selectedPosStore) {
+        setSelectedPosStore(stRes.data[0].name);
+      }
+
       fetchCategories(selectedMgmtStore);
       if (otRes.data.length > 0 && !orderType) {
         setOrderType(otRes.data[0].id);
@@ -576,25 +600,66 @@ export default function App() {
 
           <div style={{ flex: '3 1 500px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
-              <button onClick={() => setSelectedPosStore('전체')} style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: selectedPosStore === '전체' ? '#0f172a' : '#f1f5f9', color: selectedPosStore === '전체' ? '#fff' : '#64748b', fontWeight: 'bold' }}>가게 전체</button>
               {storeTags.map(tag => (
-                <button key={tag.id} onClick={() => setSelectedPosStore(tag.name)} style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: selectedPosStore === tag.name ? '#0f172a' : '#f1f5f9', color: selectedPosStore === tag.name ? '#fff' : '#64748b', fontWeight: 'bold' }}>{tag.name}</button>
+                <button 
+                  key={tag.id} 
+                  onClick={() => setSelectedPosStore(tag.name)} 
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: '20px', 
+                    border: 'none', 
+                    cursor: 'pointer', 
+                    background: selectedPosStore === tag.name ? '#0f172a' : '#f1f5f9', 
+                    color: selectedPosStore === tag.name ? '#fff' : '#64748b', 
+                    fontWeight: 'bold' 
+                  }}
+                >
+                  {tag.name}
+                </button>
               ))}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
-              <button onClick={() => setSelectedPosCategory('전체')} style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', background: selectedPosCategory === '전체' ? '#2563eb' : '#f1f5f9', color: selectedPosCategory === '전체' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>카테고리 전체</button>
-              <button onClick={() => setSelectedPosCategory('카테고리 없음')} style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', background: selectedPosCategory === '카테고리 없음' ? '#2563eb' : '#f1f5f9', color: selectedPosCategory === '카테고리 없음' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>카테고리 없음</button>
+              <button 
+                onClick={() => setSelectedPosCategory('카테고리 없음')} 
+                style={{ 
+                  padding: '6px 14px', 
+                  borderRadius: '16px', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  background: selectedPosCategory === '카테고리 없음' ? '#2563eb' : '#f1f5f9', 
+                  color: selectedPosCategory === '카테고리 없음' ? '#fff' : '#64748b', 
+                  fontWeight: 'bold', 
+                  fontSize: '13px' 
+                }}
+              >
+                카테고리 없음
+              </button>
               {categories.map(cat => (
-                <button key={cat.id} onClick={() => setSelectedPosCategory(cat.name)} style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', background: selectedPosCategory === cat.name ? '#2563eb' : '#f1f5f9', color: selectedPosCategory === cat.name ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>{cat.name}</button>
+                <button 
+                  key={cat.id} 
+                  onClick={() => setSelectedPosCategory(cat.name)} 
+                  style={{ 
+                    padding: '6px 14px', 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    cursor: 'pointer', 
+                    background: selectedPosCategory === cat.name ? '#2563eb' : '#f1f5f9', 
+                    color: selectedPosCategory === cat.name ? '#fff' : '#64748b', 
+                    fontWeight: 'bold', 
+                    fontSize: '13px' 
+                  }}
+                >
+                  {cat.name}
+                </button>
               ))}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
               {menus.filter(m => {
-                const storeMatch = selectedPosStore === '전체' || m.store_tag === selectedPosStore;
+                const storeMatch = !selectedPosStore || m.store_tag === selectedPosStore;
                 const menuCatName = m.categories?.name || '카테고리 없음';
-                const catMatch = selectedPosCategory === '전체' || menuCatName === selectedPosCategory;
+                const catMatch = selectedPosCategory === '' || menuCatName === selectedPosCategory;
                 return storeMatch && catMatch;
               }).map(m => (
                 <button key={m.id} onClick={() => addToCart(m)} style={{ padding: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', textAlign: 'left' }}>
