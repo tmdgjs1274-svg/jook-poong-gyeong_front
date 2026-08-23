@@ -302,15 +302,20 @@ export default function App() {
     fetchInitialData();
   };
 
-  const handleUpdateMenuModal = async () => {
-    await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, {
-      ...editingMenuModal,
-      category_id: editingMenuModal.category_id === '' ? null : editingMenuModal.category_id
-    });
-    showToast('✅ 메뉴가 수정되었습니다.');
-    setEditingMenuModal(null);
-    fetchInitialData();
-  };
+const handleUpdateMenuModal = async () => {
+  const selectedCat = categories.find(c => c.id === Number(editingMenuModal.category_id));
+
+  await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, {
+    name: editingMenuModal.name,
+    price: editingMenuModal.price,
+    store_tag: editingMenuModal.store_tag,
+    category_id: editingMenuModal.category_id === '' ? null : editingMenuModal.category_id,
+    category: selectedCat ? selectedCat.name : null
+  });
+  showToast('✅ 메뉴가 수정되었습니다.');
+  setEditingMenuModal(null);
+  fetchInitialData();
+};
 
   const handleDeleteMenu = async (id) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
@@ -721,7 +726,7 @@ export default function App() {
                   <td style={{ fontWeight: 'bold' }}>{m.name}</td>
                   <td>{m.price.toLocaleString()}원</td>
                   <td>
-                    <button onClick={() => setEditingMenuModal({ ...m, category_id: m.category_id || '' })} style={{ marginRight: '6px', padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
+                    <button onClick={() => setEditingMenuModal({ ...m, category_id: m.categories?.id || m.category_id || '' })} style={{ marginRight: '6px', padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
                     <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>삭제</button>
                   </td>
                 </tr>
