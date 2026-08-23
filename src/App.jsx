@@ -1,305 +1,383 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-export default function App() {
-  const getTodayStr = () => new Date().toISOString().split('T')[0];
+// 백엔드 API 기본 주소 (배포 환경 또는 로컬)
+const API_BASE_URL = 'http://localhost:3000';
 
-  const [activeTab, setActiveTab] = useState('pos');
+export default function App() {
+  const [currentTab, setCurrentTab] = useState('order'); // 'order', 'sales', 'menu', 'store'
+  
+  // 마스터 데이터
   const [menus, setMenus] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [orderType, setOrderType] = useState(null); 
-  const [paymentType, setPaymentType] = useState('카드'); // 카드 / 현금 구분 state
-  const [orderDate, setOrderDate] = useState(getTodayStr()); 
   const [storeTags, setStoreTags] = useState([]);
   const [orderTypes, setOrderTypes] = useState([]);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [selectedPosStore, setSelectedPosStore] = useState('전체');
-  const [selectedMgmtStore, setSelectedMgmtStore] = useState('전체');
+  // 주문 입력 상태
+  const [selectedStoreTag, setSelectedStoreTag] = useState(null);
+  const [selectedOrderType, setSelectedOrderType] = useState(null);
+  const [paymentType, setPaymentType] = useState('카드'); // '카드' 또는 '현금'
+  const [orderItems, setOrderItems] = useState([]); // [{ menu_id, name, price, quantity }]
+  const [discountAmount, setDiscountAmount] = useState(0); // 금액 할인
 
-  // 일매출 정산 state
-  const [dateList, setDateList] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(getTodayStr());
+  // 일매출 정산 상태
+  const [salesDates, setSalesDates] = useState([]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [dailyOrders, setDailyOrders] = useState([]);
-  const [filterStore, setFilterStore] = useState('전체');
-  const [filterOrderType, setFilterOrderType] = useState('전체');
+  const [selectedStoreFilter, setSelectedStoreFilter] = useState('전체');
+  const [selectedOrderTypeFilter, setSelectedOrderTypeFilter] = useState('전체');
+
+  // 주문 수정 모달 상태
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 메뉴/카테고리 관리 state
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newMenu, setNewMenu] = useState({ name: '', price: '', store_tag: '' });
-  const [editingMenuModal, setEditingMenuModal] = useState(null);
-  const [newStoreInput, setNewStoreInput] = useState('');
-  const [newOrderTypeInput, setNewOrderTypeInput] = useState('');
+  // 설정 탭 상태
+  const [newMenuName, setNewMenuName] = useState('');
+  const [newMenuPrice, setNewMenuPrice] = useState('');
+  const [newMenuStoreTagId, setNewMenuStoreTagId] = useState('');
+  
+  const [newStoreTagName, setNewStoreTagName] = useState('');
+  const [newOrderTypeName, setNewOrderTypeName] = useState('');
 
-  // 할인 입력 모달 state
-  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
-  const [discountName, setDiscountName] = useState('금액 할인');
-  const [discountAmount, setDiscountAmount] = useState('');
-
-  const [draggedOrderIdx, setDraggedOrderIdx] = useState(null);
-  const [draggedMenuIdx, setDraggedMenuIdx] = useState(null);
-  const [draggedStoreIdx, setDraggedStoreIdx] = useState(null);
-  const [draggedOrderTypeIdx, setDraggedOrderTypeIdx] = useState(null);
-
-  // const API_BASE_URL = 'http://localhost:3000/api';
-  const API_BASE_URL = 'https://jook-poong-gyeong.onrender.com/api';
-
+  // 초기 데이터 로드
   useEffect(() => {
-    fetchInitialData();
+    fetchMetaData();
   }, []);
 
-  useEffect(() => {
-    if (activeTab === 'sales') {
-      fetchDateList();
-      fetchDailyOrders(selectedDate);
-    }
-  }, [activeTab, selectedDate]);
+  const fetchMetaData = async () => {
+    try {
+      const [menuRes, storeRes, typeRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/menus`),
+        axios.get(`${API_BASE_URL}/api/store-tags`),
+        axios.get(`${API_BASE_URL}/api/order-types`)
+      ]);
+      setMenus(menuRes.data);
+      setStoreTags(storeRes.data);
+      setOrderTypes(typeRes.data);
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 2500);
+      if (storeRes.data.length > 0) setSelectedStoreTag(storeRes.data[0].id);
+      if (typeRes.data.length > 0) setSelectedOrderType(typeRes.data[0].id);
+    } catch (err) {
+      console.error('초기 데이터 로딩 실패:', err);
+    }
   };
 
-  const fetchInitialData = async () => {
+  // 일매출 탭 진입 시 날짜 목록 조회
+  useEffect(() => {
+    if (currentTab === 'sales') {
+      fetchSalesDates();
+    }
+  }, [currentTab]);
+
+  const fetchSalesDates = async () => {
     try {
-      const [mRes, stRes, otRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/menus`),
-        axios.get(`${API_BASE_URL}/store-tags`),
-        axios.get(`${API_BASE_URL}/order-types`)
-      ]);
-      setMenus(mRes.data);
-      setStoreTags(stRes.data);
-      setOrderTypes(otRes.data);
-      if (otRes.data.length > 0 && !orderType) {
-        setOrderType(otRes.data[0].id);
+      const res = await axios.get(`${API_BASE_URL}/api/sales/dates`);
+      setSalesDates(res.data);
+      if (res.data.length > 0 && !selectedDate) {
+        setSelectedDate(res.data[0]);
       }
+    } catch (err) {
+      console.error('매출 날짜 조회 실패:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedDate && currentTab === 'sales') {
+      fetchDailySales(selectedDate);
+    }
+  }, [selectedDate]);
+
+  const fetchDailySales = async (date) => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/sales/daily?date=${date}`);
+      setDailyOrders(res.data);
+    } catch (err) {
+      console.error('일일 매출 조회 실패:', err);
+    }
+  };
+
+  // 메뉴 담기
+  const handleAddToCart = (menu) => {
+    setOrderItems(prev => {
+      const existing = prev.find(item => item.menu_id === menu.id);
+      if (existing) {
+        return prev.map(item => 
+          item.menu_id === menu.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      } else {
+        return [...prev, { menu_id: menu.id, name: menu.name, price: menu.price, quantity: 1 }];
+      }
+    });
+  };
+
+  // 수량 변경
+  const handleQuantityChange = (menu_id, delta) => {
+    setOrderItems(prev => {
+      return prev.map(item => {
+        if (item.menu_id === menu_id) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter(Boolean);
+    });
+  };
+
+  // 직접 금액 할인 항목 추가 (menu_id: 0 또는 null)
+  const handleAddCustomDiscount = () => {
+    if (!discountAmount || isNaN(discountAmount) || Number(discountAmount) <= 0) {
+      alert('올바른 할인 금액을 입력해주세요.');
+      return;
+    }
+    const dAmount = Number(discountAmount);
+    setOrderItems(prev => [
+      ...prev,
+      { menu_id: 0, name: `할인/기타`, price: -dAmount, quantity: 1 }
+    ]);
+    setDiscountAmount(0);
+  };
+
+  const calculatedTotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  // 주문 전송
+  const handleSubmitOrder = async () => {
+    if (orderItems.length === 0) {
+      alert('주문할 상품을 선택해주세요.');
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/orders`, {
+        store_id: selectedStoreTag,
+        order_type_id: selectedOrderType,
+        payment_type: paymentType,
+        total_amount: calculatedTotal,
+        items: orderItems
+      });
+      alert('주문이 완료되었습니다!');
+      setOrderItems([]);
+    } catch (err) {
+      console.error('주문 실패:', err);
+      alert('주문 저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 주문 삭제
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm('정말 이 주문을 삭제하시겠습니까?')) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/orders/${orderId}`);
+      fetchDailySales(selectedDate);
+    } catch (err) {
+      console.error('주문 삭제 실패:', err);
+      alert('삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 주문 수정 저장
+  const handleUpdateOrderSubmit = async () => {
+    if (!editingOrder) return;
+    try {
+      // 기존 주문 삭제 후 재생성 또는 수정 API 호출 (여기서는 기존 삭제 후 새 주문 등록 방식으로 안정성 확보 혹은 백엔드 수정 연동)
+      await axios.delete(`${API_BASE_URL}/api/orders/${editingOrder.id}`);
+      await axios.post(`${API_BASE_URL}/api/orders`, {
+        store_id: editingOrder.store_id,
+        order_type_id: editingOrder.order_type_id,
+        payment_type: editingOrder.payment_type,
+        total_amount: editingOrder.order_items.reduce((sum, i) => sum + (i.price * i.quantity), 0),
+        items: editingOrder.order_items.map(i => ({
+          menu_id: i.menu_id,
+          quantity: i.quantity,
+          price: i.price
+        })),
+        created_at: editingOrder.created_at // 기존 날짜 유지
+      });
+
+      alert('주문이 수정되었습니다.');
+      setEditingOrder(null);
+      fetchDailySales(selectedDate);
+    } catch (err) {
+      console.error('주문 수정 실패:', err);
+      alert('주문 수정 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 관리자 기능 (메뉴 추가/삭제, 가게/배달 추가/삭제)
+  const handleAddMenu = async (e) => {
+    e.preventDefault();
+    if (!newMenuName || !newMenuPrice || !newMenuStoreTagId) {
+      alert('모든 항목을 입력해주세요.');
+      return;
+    }
+    try {
+      await axios.post(`${API_BASE_URL}/api/menus`, {
+        name: newMenuName,
+        price: Number(newMenuPrice),
+        store_tag_id: Number(newMenuStoreTagId)
+      });
+      setNewMenuName('');
+      setNewMenuPrice('');
+      fetchMetaData();
+      alert('메뉴가 추가되었습니다.');
     } catch (err) {
       console.error(err);
     }
   };
 
-  const fetchDateList = () => {
-    axios.get(`${API_BASE_URL}/sales/dates`).then(res => {
-      setDateList(res.data);
-      if (res.data.length > 0 && !res.data.includes(selectedDate)) {
-        setSelectedDate(res.data[0]);
-      }
-    });
-  };
-
-  const fetchDailyOrders = (date) => {
-    axios.get(`${API_BASE_URL}/sales/daily?date=${date}`).then(res => setDailyOrders(res.data));
-  };
-
-  const addToCart = (menu) => {
-    setCart(prev => {
-      const exist = prev.find(item => item.menu_id === menu.id && !item.isDiscount);
-      if (exist) {
-        return prev.map(item => item.menu_id === menu.id && !item.isDiscount ? { ...item, quantity: item.quantity + 1 } : item);
-      }
-      return [...prev, { menu_id: menu.id, name: menu.name, price: menu.price, quantity: 1, isDiscount: false }];
-    });
-  };
-
-  const addDiscountToCart = () => {
-    const amt = Number(discountAmount);
-    if (!amt || amt <= 0) return alert('유효한 할인 금액을 입력해주세요.');
-    
-    // 금액 할인을 음수 가격 항목으로 장바구니에 추가
-    setCart(prev => [...prev, {
-      menu_id: 0,
-      name: discountName || '금액 할인',
-      price: -amt,
-      quantity: 1,
-      isDiscount: true
-    }]);
-
-    setDiscountAmount('');
-    setIsDiscountModalOpen(false);
-    showToast('할인 항목이 추가되었습니다.');
-  };
-
-  const updateQuantity = (menuId, change, isDiscount) => {
-    setCart(prev => prev.map(item => {
-      if (item.menu_id === menuId && item.isDiscount === isDiscount) {
-        const newQty = item.quantity + change;
-        return newQty > 0 ? { ...item, quantity: newQty } : item;
-      }
-      return item;
-    }));
-  };
-
-  const removeFromCart = (menuId, isDiscount) => {
-    setCart(prev => prev.filter(item => !(item.menu_id === menuId && item.isDiscount === isDiscount)));
-  };
-
-  const handleOrder = async () => {
-    if (cart.length === 0) return alert('선택된 메뉴가 없습니다!');
-    if (!orderType) return alert('주문/배달 구분을 선택해주세요!');
-
-    const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
-    const payload = {
-      store_id: 1,
-      order_type_id: orderType,
-      payment_type: paymentType,
-      total_amount: totalAmount,
-      items: cart.map(item => ({
-        menu_id: item.menu_id === 0 ? null : item.menu_id,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      created_at: orderDate
-    };
-
+  const handleDeleteMenu = async (id) => {
+    if (!window.confirm('메뉴를 삭제하시겠습니까?')) return;
     try {
-      setIsSubmitting(true);
-      await axios.post(`${API_BASE_URL}/orders`, payload);
-      showToast('✅ 주문이 정상적으로 저장되었습니다.');
-      setCart([]);
+      await axios.delete(`${API_BASE_URL}/api/menus/${id}`);
+      fetchMetaData();
     } catch (err) {
-      alert(`주문 저장 실패: ${err.response?.data?.error || err.message}`);
-    } finally {
-      setIsSubmitting(false);
+      console.error(err);
     }
   };
 
-  const handleAddStoreTag = async () => {
-    if (!newStoreInput) return;
-    await axios.post(`${API_BASE_URL}/store-tags`, { name: newStoreInput });
-    setNewStoreInput('');
-    showToast('가게 구분이 추가되었습니다.');
-    fetchInitialData();
+  const handleAddStoreTag = async (e) => {
+    e.preventDefault();
+    if (!newStoreTagName) return;
+    try {
+      await axios.post(`${API_BASE_URL}/api/store-tags`, { name: newStoreTagName });
+      setNewStoreTagName('');
+      fetchMetaData();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleDeleteStoreTag = async (id) => {
-    if (!window.confirm('이 가게 구분을 정말 삭제하시겠습니까?')) return;
+    if (!window.confirm('가게 구분을 삭제하시겠습니까?')) return;
     try {
-      await axios.delete(`${API_BASE_URL}/store-tags/${id}`);
-      showToast('가게 구분이 삭제되었습니다.');
-      fetchInitialData();
+      await axios.delete(`${API_BASE_URL}/api/store-tags/${id}`);
+      fetchMetaData();
     } catch (err) {
-      alert('삭제 실패: 연관된 데이터가 있습니다.');
+      console.error(err);
     }
   };
 
-  const handleAddOrderType = async () => {
-    if (!newOrderTypeInput) return;
-    const res = await axios.post(`${API_BASE_URL}/order-types`, { name: newOrderTypeInput });
-    setNewOrderTypeInput('');
-    showToast('배달 구분이 추가되었습니다.');
-    fetchInitialData();
-    if (res.data && res.data[0]?.id) setOrderType(res.data[0].id);
+  const handleAddOrderType = async (e) => {
+    e.preventDefault();
+    if (!newOrderTypeName) return;
+    try {
+      await axios.post(`${API_BASE_URL}/api/order-types`, { name: newOrderTypeName });
+      setNewOrderTypeName('');
+      fetchMetaData();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleDeleteOrderType = async (id) => {
-    if (!window.confirm('이 배달 구분을 정말 삭제하시겠습니까?')) return;
-    await axios.delete(`${API_BASE_URL}/order-types/${id}`);
-    showToast('배달 구분이 삭제되었습니다.');
-    fetchInitialData();
+    if (!window.confirm('배달 구분을 삭제하시겠습니까?')) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/order-types/${id}`);
+      fetchMetaData();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleCreateMenu = async () => {
-    if (!newMenu.name || !newMenu.price || !newMenu.store_tag) return alert('모든 항목을 입력해 주세요.');
-    await axios.post(`${API_BASE_URL}/menus`, newMenu);
-    showToast('✅ 새 메뉴가 등록되었습니다.');
-    setIsCreateModalOpen(false);
-    fetchInitialData();
-  };
+  // 필터링된 메뉴
+  const filteredMenus = menus.filter(m => m.store_tag_id === Number(selectedStoreTag));
 
-  const handleUpdateMenuModal = async () => {
-    await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, editingMenuModal);
-    showToast('✅ 메뉴가 수정되었습니다.');
-    setEditingMenuModal(null);
-    fetchInitialData();
-  };
-
-  const handleDeleteMenu = async (id) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
-    await axios.delete(`${API_BASE_URL}/menus/${id}`);
-    showToast('메뉴가 삭제되었습니다.');
-    fetchInitialData();
-  };
-
-  const handleDeleteOrder = async (orderId) => {
-    if (!window.confirm('주문 내역을 삭제하시겠습니까?')) return;
-    await axios.delete(`${API_BASE_URL}/orders/${orderId}`);
-    showToast('주문 내역이 삭제되었습니다.');
-    fetchDailyOrders(selectedDate);
-  };
-
-  const handleGenericDrop = (list, setList, dragIdx, dropIdx) => {
-    if (dragIdx === null || dragIdx === dropIdx) return;
-    const newList = [...list];
-    const targetItem = newList[dragIdx];
-    newList.splice(dragIdx, 1);
-    newList.splice(dropIdx, 0, targetItem);
-    setList(newList);
-  };
-
+  // 필터링된 일일 매출 목록
   const filteredDailyOrders = dailyOrders.filter(order => {
-    const storeMatch = filterStore === '전체' || order.order_items.some(i => i.menus?.store_tag === filterStore);
-    const typeMatch = filterOrderType === '전체' || order.order_types?.name === filterOrderType;
-    return storeMatch && typeMatch;
+    const storeObj = storeTags.find(s => s.id === order.store_id);
+    const storeName = storeObj ? storeObj.name : '';
+    const orderTypeName = order.order_types ? order.order_types.name : '';
+
+    const matchStore = selectedStoreFilter === '전체' || storeName === selectedStoreFilter;
+    const matchType = selectedOrderTypeFilter === '전체' || orderTypeName === selectedOrderTypeFilter;
+    return matchStore && matchType;
   });
 
-  return (
-    <div style={{ padding: '16px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333' }}>
-      
-      {toastMessage && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', background: '#1e293b', color: '#fff', padding: '12px 20px', borderRadius: '8px', zIndex: 9999, fontWeight: 'bold' }}>
-          {toastMessage}
-        </div>
-      )}
+  const totalFilteredSalesAmount = filteredDailyOrders.reduce((sum, o) => sum + o.total_amount, 0);
 
-      {/* 상단 네비게이션 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', backgroundColor: '#fff', padding: '12px 20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setActiveTab('pos')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b' }}>주문 입력</button>
-          <button onClick={() => setActiveTab('sales')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b' }}>일매출 정산</button>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setActiveTab('menuMgmt')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'menuMgmt' ? '#10b981' : '#f1f5f9', color: activeTab === 'menuMgmt' ? '#fff' : '#64748b' }}>⚙️ 메뉴 관리</button>
-          <button onClick={() => setActiveTab('categoryMgmt')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'categoryMgmt' ? '#8b5cf6' : '#f1f5f9', color: activeTab === 'categoryMgmt' ? '#fff' : '#64748b' }}>🏷️ 가게/배달 관리</button>
+  return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'sans-serif', padding: '20px' }}>
+      {/* 상단 네비게이션 탭 */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '2px solid #dee2e6', paddingBottom: '15px' }}>
+        <button 
+          onClick={() => setCurrentTab('order')}
+          style={{ padding: '10px 20px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: currentTab === 'order' ? '#007bff' : '#e9ecef', color: currentTab === 'order' ? '#fff' : '#495057', border: 'none', borderRadius: '5px' }}>
+          주문 입력
+        </button>
+        <button 
+          onClick={() => setCurrentTab('sales')}
+          style={{ padding: '10px 20px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: currentTab === 'sales' ? '#007bff' : '#e9ecef', color: currentTab === 'sales' ? '#fff' : '#495057', border: 'none', borderRadius: '5px' }}>
+          일매출 정산
+        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={() => setCurrentTab('menu')}
+            style={{ padding: '10px 15px', fontSize: '14px', cursor: 'pointer', backgroundColor: currentTab === 'menu' ? '#6c757d' : '#e9ecef', color: currentTab === 'menu' ? '#fff' : '#495057', border: 'none', borderRadius: '5px' }}>
+            ⚙️ 메뉴 관리
+          </button>
+          <button 
+            onClick={() => setCurrentTab('store')}
+            style={{ padding: '10px 15px', fontSize: '14px', cursor: 'pointer', backgroundColor: currentTab === 'store' ? '#6c757d' : '#e9ecef', color: currentTab === 'store' ? '#fff' : '#495057', border: 'none', borderRadius: '5px' }}>
+            🏷️ 가게/배달 관리
+          </button>
         </div>
       </div>
 
-      {/* 1. POS 영역 */}
-      {activeTab === 'pos' && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 360px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px' }}>주문 내역</h2>
-              <button onClick={() => setIsDiscountModalOpen(true)} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                🏷️ 금액 할인 추가
-              </button>
-            </div>
-            
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>저장 일자</label>
-              <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+      {/* [1] 주문 입력 탭 */}
+      {currentTab === 'order' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '20px' }}>
+          {/* 좌측: 메뉴 선택 영역 */}
+          <div>
+            {/* 가게 구분 선택 */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              {storeTags.map(tag => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedStoreTag(tag.id)}
+                  style={{
+                    padding: '10px 20px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer',
+                    backgroundColor: selectedStoreTag === tag.id ? '#343a40' : '#fff',
+                    color: selectedStoreTag === tag.id ? '#fff' : '#343a40',
+                    border: '1px solid #ced4da', borderRadius: '5px'
+                  }}
+                >
+                  {tag.name}
+                </button>
+              ))}
             </div>
 
-            {/* 주문 / 배달 구분 뱃지 (선택 시 그린 색상) */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 / 배달 구분</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {/* 메뉴 그리드 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px' }}>
+              {filteredMenus.map(menu => (
+                <button
+                  key={menu.id}
+                  onClick={() => handleAddToCart(menu)}
+                  style={{
+                    padding: '20px 10px', backgroundColor: '#fff', border: '1px solid #ced4da',
+                    borderRadius: '8px', cursor: 'pointer', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>{menu.name}</div>
+                  <div style={{ fontSize: '14px', color: '#007bff' }}>{menu.price.toLocaleString()}원</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 우측: 장바구니 및 주문 완료 영역 */}
+          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6', display: 'flex', flexDirection: 'column', height: 'fit-content' }}>
+            <h3>주문 내역</h3>
+            
+            {/* 배달 구분 선택 */}
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '13px', color: '#6c757d', display: 'block', marginBottom: '5px' }}>주문/배달 구분</label>
+              <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
                 {orderTypes.map(ot => (
                   <button
                     key={ot.id}
-                    onClick={() => setOrderType(ot.id)}
+                    onClick={() => setSelectedOrderType(ot.id)}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: '16px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      fontWeight: 'bold',
-                      background: orderType === ot.id ? '#10b981' : '#f1f5f9',
-                      color: orderType === ot.id ? '#fff' : '#64748b',
-                      boxShadow: orderType === ot.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                      padding: '6px 12px', fontSize: '13px', cursor: 'pointer',
+                      backgroundColor: selectedOrderType === ot.id ? '#007bff' : '#f1f3f5',
+                      color: selectedOrderType === ot.id ? '#fff' : '#495057',
+                      border: 'none', borderRadius: '4px'
                     }}
                   >
                     {ot.name}
@@ -308,370 +386,414 @@ export default function App() {
               </div>
             </div>
 
-            {/* 카드 / 현금 구분 뱃지 */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>결제 구분</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {['카드', '현금'].map(pt => (
+            {/* 결제 수단 선택 */}
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ fontSize: '13px', color: '#6c757d', display: 'block', marginBottom: '5px' }}>결제 수단</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {['카드', '현금'].map(type => (
                   <button
-                    key={pt}
-                    onClick={() => setPaymentType(pt)}
+                    key={type}
+                    onClick={() => setPaymentType(type)}
                     style={{
-                      padding: '6px 16px',
-                      borderRadius: '16px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      fontWeight: 'bold',
-                      background: paymentType === pt ? '#10b981' : '#f1f5f9',
-                      color: paymentType === pt ? '#fff' : '#64748b',
+                      flex: 1, padding: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer',
+                      backgroundColor: paymentType === type ? '#28a745' : '#f1f3f5',
+                      color: paymentType === type ? '#fff' : '#495057',
+                      border: 'none', borderRadius: '4px'
                     }}
                   >
-                    {pt}
+                    {type}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div style={{ flex: 1, minHeight: '180px', maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '36px' }}>
-                    <th>메뉴 / 할인</th><th>수량</th><th style={{ textAlign: 'right' }}>금액</th><th style={{ textAlign: 'center', width: '50px' }}>삭제</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', height: '44px', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold' }}>{item.name}</td>
-                      <td>
-                        {!item.isDiscount ? (
-                          <>
-                            <button onClick={() => updateQuantity(item.menu_id, -1, false)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>-</button>
-                            <span style={{ margin: '0 6px', fontWeight: 'bold' }}>{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.menu_id, 1, false)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>+</button>
-                          </>
-                        ) : (
-                          <span>1</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{(item.price * item.quantity).toLocaleString()}원</td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button onClick={() => removeFromCart(item.menu_id, item.isDiscount)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>삭제</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <span style={{ fontSize: '16px', fontWeight: 'bold' }}>총 결제 금액</span>
-                <span style={{ fontSize: '22px', fontWeight: 'bold', color: '#2563eb' }}>{cart.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}원</span>
-              </div>
-              <button 
-                onClick={handleOrder} 
-                disabled={isSubmitting}
-                style={{ 
-                  width: '100%', 
-                  padding: '14px', 
-                  background: isSubmitting ? '#94a3b8' : '#10b981', 
-                  color: '#fff', 
-                  border: 'none', 
-                  borderRadius: '8px', 
-                  fontSize: '16px', 
-                  fontWeight: 'bold', 
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer' 
-                }}
-              >
-                {isSubmitting ? '저장 중...' : '결제 및 주문 저장'}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ flex: '3 1 500px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
-              <button onClick={() => setSelectedPosStore('전체')} style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: selectedPosStore === '전체' ? '#0f172a' : '#f1f5f9', color: selectedPosStore === '전체' ? '#fff' : '#64748b', fontWeight: 'bold' }}>전체</button>
-              {storeTags.map(tag => (
-                <button key={tag.id} onClick={() => setSelectedPosStore(tag.name)} style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: selectedPosStore === tag.name ? '#0f172a' : '#f1f5f9', color: selectedPosStore === tag.name ? '#fff' : '#64748b', fontWeight: 'bold' }}>{tag.name}</button>
-              ))}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-              {menus.filter(m => selectedPosStore === '전체' || m.store_tag === selectedPosStore).map(m => (
-                <button key={m.id} onClick={() => addToCart(m)} style={{ padding: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', textAlign: 'left' }}>
-                  <span style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
-                  <div style={{ fontSize: '15px', fontWeight: 'bold', marginTop: '8px', marginBottom: '4px' }}>{m.name}</div>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
+            {/* 금액 할인 직접 입력 영역 */}
+            <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+              <label style={{ fontSize: '13px', color: '#495057', display: 'block', marginBottom: '5px' }}>금액 할인 (원 단위 입력)</label>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                <input 
+                  type="number" 
+                  value={discountAmount} 
+                  onChange={(e) => setDiscountAmount(e.target.value)} 
+                  placeholder="예: 2000"
+                  style={{ flex: 1, padding: '6px', fontSize: '14px', border: '1px solid #ced4da', borderRadius: '4px' }}
+                />
+                <button 
+                  onClick={handleAddCustomDiscount}
+                  style={{ padding: '6px 12px', backgroundColor: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}
+                >
+                  할인 적용
                 </button>
-              ))}
+              </div>
             </div>
+
+            {/* 담긴 상품 리스트 */}
+            <div style={{ minHeight: '150px', maxHeight: '250px', overflowY: 'auto', borderTop: '1px solid #dee2e6', borderBottom: '1px solid #dee2e6', padding: '10px 0', marginBottom: '15px' }}>
+              {orderItems.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#adb5bd', marginTop: '50px' }}>선택된 메뉴가 없습니다.</p>
+              ) : (
+                orderItems.map((item, index) => (
+                  <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', fontSize: '14px' }}>
+                    <div style={{ flex: 1 }}>{item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {item.menu_id !== 0 && (
+                        <>
+                          <button onClick={() => handleQuantityChange(item.menu_id, -1)} style={{ width: '24px', height: '24px', cursor: 'pointer' }}>-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => handleQuantityChange(item.menu_id, 1)} style={{ width: '24px', height: '24px', cursor: 'pointer' }}>+</button>
+                        </>
+                      )}
+                      {item.menu_id === 0 && <span>{item.quantity}개</span>}
+                      <span style={{ width: '70px', textAlign: 'right' }}>{(item.price * item.quantity).toLocaleString()}원</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* 총 금액 및 결제 버튼 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 'bold', marginBottom: '20px' }}>
+              <span>총 결제금액</span>
+              <span style={{ color: '#007bff' }}>{calculatedTotal.toLocaleString()}원</span>
+            </div>
+
+            <button
+              onClick={handleSubmitOrder}
+              style={{ width: '100%', padding: '15px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              주문 완료 (결제하기)
+            </button>
           </div>
         </div>
       )}
 
-      {/* 2. 일매출 정산 */}
-      {activeTab === 'sales' && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 200px', maxWidth: '240px', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>일자 목록</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {dateList.map(date => (
-                <button key={date} onClick={() => setSelectedDate(date)} style={{ padding: '12px', background: selectedDate === date ? '#2563eb' : '#f8fafc', color: selectedDate === date ? '#fff' : '#334155', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+      {/* [2] 일매출 정산 탭 */}
+      {currentTab === 'sales' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '20px' }}>
+          {/* 좌측: 날짜 목록 */}
+          <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #dee2e6', height: 'fit-content' }}>
+            <h4 style={{ marginTop: 0, marginBottom: '15px' }}>일자 목록</h4>
+            {salesDates.length === 0 ? (
+              <p style={{ color: '#adb5bd', fontSize: '14px' }}>매출 내역이 없습니다.</p>
+            ) : (
+              salesDates.map(date => (
+                <button
+                  key={date}
+                  onClick={() => setSelectedDate(date)}
+                  style={{
+                    width: '100%', padding: '12px', marginBottom: '8px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer',
+                    backgroundColor: selectedDate === date ? '#007bff' : '#f8f9fa',
+                    color: selectedDate === date ? '#fff' : '#495057',
+                    border: '1px solid #ced4da', borderRadius: '6px'
+                  }}
+                >
                   {date}
                 </button>
-              ))}
-            </div>
+              ))
+            )}
           </div>
 
-          <div style={{ flex: '99 1 600px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '20px' }}>{selectedDate} 매출 상세 정보</h2>
-            
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', background: '#f8fafc', padding: '14px', borderRadius: '8px', flexWrap: 'wrap' }}>
+          {/* 우측: 해당 일자 매출 상세 */}
+          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+            <h3 style={{ marginTop: 0, textAlign: 'center', marginBottom: '20px' }}>{selectedDate} 매출 상세 정보</h3>
+
+            {/* 필터 버튼들 */}
+            <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', alignItems: 'center', flexWrap: 'wrap' }}>
               <div>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold', marginRight: '8px' }}>가게 구분:</span>
-                <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155' }}>전체</button>
-                {storeTags.map(st => (
-                  <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155' }}>{st.name}</button>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', marginRight: '10px' }}>가게 구분:</span>
+                {['전체', ...storeTags.map(s => s.name)].map(stName => (
+                  <button
+                    key={stName}
+                    onClick={() => setSelectedStoreFilter(stName)}
+                    style={{
+                      padding: '6px 12px', marginRight: '5px', fontSize: '13px', cursor: 'pointer',
+                      backgroundColor: selectedStoreFilter === stName ? '#495057' : '#fff',
+                      color: selectedStoreFilter === stName ? '#fff' : '#495057',
+                      border: '1px solid #ced4da', borderRadius: '4px'
+                    }}
+                  >
+                    {stName}
+                  </button>
                 ))}
               </div>
+
               <div>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold', marginRight: '8px' }}>주문/배달:</span>
-                <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155' }}>전체</button>
-                {orderTypes.map(ot => (
-                  <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155' }}>{ot.name}</button>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', marginRight: '10px' }}>주문/배달:</span>
+                {['전체', ...orderTypes.map(ot => ot.name)].map(otName => (
+                  <button
+                    key={otName}
+                    onClick={() => setSelectedOrderTypeFilter(otName)}
+                    style={{
+                      padding: '6px 12px', marginRight: '5px', fontSize: '13px', cursor: 'pointer',
+                      backgroundColor: selectedOrderTypeFilter === otName ? '#007bff' : '#fff',
+                      color: selectedOrderTypeFilter === otName ? '#fff' : '#495057',
+                      border: '1px solid #ced4da', borderRadius: '4px'
+                    }}
+                  >
+                    {otName}
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
-              <div style={{ flex: 1, background: '#eff6ff', padding: '16px', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
-                <div style={{ fontSize: '13px', color: '#1e40af' }}>총 주문 건수</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e3a8a' }}>{filteredDailyOrders.length} 건</div>
+            {/* 요약 카드 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+              <div style={{ padding: '20px', backgroundColor: '#e7f5ff', borderRadius: '8px', border: '1px solid #bae8ff', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', color: '#1864ab', marginBottom: '5px' }}>총 주문 건수</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1c7ed6' }}>{filteredDailyOrders.length} 건</div>
               </div>
-              <div style={{ flex: 1, background: '#ecfdf5', padding: '16px', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
-                <div style={{ fontSize: '13px', color: '#065f46' }}>총 매출 금액</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#064e3b' }}>{filteredDailyOrders.reduce((s, o) => s + o.total_amount, 0).toLocaleString()} 원</div>
+              <div style={{ padding: '20px', backgroundColor: '#ebfbee', borderRadius: '8px', border: '1px solid #d3f9d8', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', color: '#2b8a3e', marginBottom: '5px' }}>총 매출 금액</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2b8a3e' }}>{totalFilteredSalesAmount.toLocaleString()} 원</div>
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '650px' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
-                    <th style={{ width: '40px' }}></th>
-                    <th style={{ width: '130px' }}>주문일시</th>
-                    <th style={{ width: '130px' }}>구분 (결제)</th>
-                    <th style={{ textAlign: 'left', paddingLeft: '12px' }}>주문 상품 상세</th>
-                    <th style={{ width: '110px' }}>총 금액</th>
-                    <th style={{ width: '100px' }}>관리</th>
+            {/* 주문 상세 테이블 */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f1f3f5', borderBottom: '2px solid #dee2e6' }}>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>주문일시</th>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>구분 (결제)</th>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>주문 상품 상세</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>총 금액</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>관리</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDailyOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#adb5bd' }}>조건에 해당하는 주문 내역이 없습니다.</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredDailyOrders.map((order, idx) => {
-                    // created_at (예: 2026-08-23T14:30:00)을 yyyy.mm.dd HH:MM 형태로 포맷팅
-                    const dateObj = new Date(order.created_at);
-                    const formattedTime = !isNaN(dateObj.getTime()) 
-                      ? `${dateObj.getFullYear()}.${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
-                      : order.created_at;
+                ) : (
+                  filteredDailyOrders.map(order => {
+                    // 시간 포맷 정리 (YYYY-MM-DDTHH:mm:ss -> YYYY-MM-DD HH:mm)
+                    const formattedDate = order.created_at ? order.created_at.replace('T', ' ').substring(0, 16) : '';
+                    const orderTypeName = order.order_types ? order.order_types.name : '기타';
+                    const payType = order.payment_type || '카드';
+
+                    const itemsDesc = order.order_items?.map(oi => {
+                      const menuName = oi.menus ? oi.menus.name : '할인/기타';
+                      return `${menuName}(${oi.quantity}개)`;
+                    }).join(', ') || '';
 
                     return (
-                      <tr 
-                        key={order.id} 
-                        draggable 
-                        onDragStart={() => setDraggedOrderIdx(idx)}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={() => handleGenericDrop(dailyOrders, setDailyOrders, draggedOrderIdx, idx)}
-                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '52px', background: '#fff', cursor: 'grab' }}
-                      >
-                        <td style={{ color: '#94a3b8', fontSize: '16px' }}>☰</td>
-                        <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
-                        <td>
-                          <span style={{ background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
-                            {order.order_types?.name || '매장'} ({order.payment_type || '카드'})
+                      <tr key={order.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                        <td style={{ padding: '12px 10px', color: '#495057' }}>{formattedDate}</td>
+                        <td style={{ padding: '12px 10px' }}>
+                          <span style={{ padding: '4px 8px', backgroundColor: '#e9ecef', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                            {orderTypeName} ({payType})
                           </span>
                         </td>
-                        <td style={{ textAlign: 'left', paddingLeft: '12px', fontWeight: '500' }}>
-                          {order.order_items?.map(i => `${i.menus?.name || '할인/기타'}(${i.quantity}개)`).join(', ')}
-                        </td>
-                        <td style={{ fontWeight: 'bold' }}>{order.total_amount.toLocaleString()}원</td>
-                        <td>
-                          <button onClick={() => handleDeleteOrder(order.id)} style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>삭제</button>
+                        <td style={{ padding: '12px 10px' }}>{itemsDesc}</td>
+                        <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 'bold' }}>{order.total_amount.toLocaleString()}원</td>
+                        <td style={{ padding: '12px 10px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => setEditingOrder(order)}
+                            style={{ padding: '5px 10px', backgroundColor: '#ffc107', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginRight: '5px' }}
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOrder(order.id)}
+                            style={{ padding: '5px 10px', backgroundColor: '#fa5252', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                          >
+                            삭제
+                          </button>
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* 3. 메뉴 관리 탭 */}
-      {activeTab === 'menuMgmt' && (
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, fontSize: '18px' }}>메뉴 세팅 및 관리</h2>
-            <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: '' }); setIsCreateModalOpen(true); }} style={{ padding: '10px 18px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-              + 새 메뉴 등록
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button onClick={() => setSelectedMgmtStore('전체')} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === '전체' ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === '전체' ? '#fff' : '#64748b', fontWeight: 'bold' }}>전체 보기</button>
-            {storeTags.map(st => (
-              <button key={st.id} onClick={() => setSelectedMgmtStore(st.name)} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === st.name ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === st.name ? '#fff' : '#64748b', fontWeight: 'bold' }}>{st.name}</button>
-            ))}
-          </div>
+      {/* [3] 메뉴 관리 탭 */}
+      {currentTab === 'menu' && (
+        <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+          <h3 style={{ marginTop: 0 }}>메뉴 관리</h3>
+          <form onSubmit={handleAddMenu} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+            <select
+              value={newMenuStoreTagId}
+              onChange={(e) => setNewMenuStoreTagId(e.target.value)}
+              style={{ padding: '8px', border: '1px solid #ced4da', borderRadius: '4px' }}
+            >
+              <option value="">가게 선택</option>
+              {storeTags.map(tag => (
+                <option key={tag.id} value={tag.id}>{tag.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="메뉴 이름"
+              value={newMenuName}
+              onChange={(e) => setNewMenuName(e.target.value)}
+              style={{ flex: 1, padding: '8px', border: '1px solid #ced4da', borderRadius: '4px' }}
+            />
+            <input
+              type="number"
+              placeholder="가격"
+              value={newMenuPrice}
+              onChange={(e) => setNewMenuPrice(e.target.value)}
+              style={{ width: '100px', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px' }}
+            />
+            <button type="submit" style={{ padding: '8px 15px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>추가</button>
+          </form>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
-                <th style={{ width: '40px' }}></th>
-                <th>가게 구분</th><th>메뉴명</th><th>가격</th><th>관리</th>
+              <tr style={{ backgroundColor: '#f1f3f5', borderBottom: '2px solid #dee2e6' }}>
+                <th style={{ padding: '10px', textAlign: 'left' }}>가게 구분</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>메뉴명</th>
+                <th style={{ padding: '10px', textAlign: 'right' }}>가격</th>
+                <th style={{ padding: '10px', textAlign: 'center' }}>관리</th>
               </tr>
             </thead>
             <tbody>
-              {menus.filter(m => selectedMgmtStore === '전체' || m.store_tag === selectedMgmtStore).map((m, idx) => (
-                <tr 
-                  key={m.id} 
-                  draggable 
-                  onDragStart={() => setDraggedMenuIdx(idx)}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={() => handleGenericDrop(menus, setMenus, draggedMenuIdx, idx)}
-                  style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', cursor: 'grab' }}
-                >
-                  <td style={{ color: '#94a3b8', fontSize: '16px' }}>☰</td>
-                  <td><span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span></td>
-                  <td style={{ fontWeight: 'bold' }}>{m.name}</td>
-                  <td>{m.price.toLocaleString()}원</td>
-                  <td>
-                    <button onClick={() => setEditingMenuModal({ ...m })} style={{ marginRight: '6px', padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
-                    <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>삭제</button>
-                  </td>
-                </tr>
-              ))}
+              {menus.map(menu => {
+                const tagObj = storeTags.find(t => t.id === menu.store_tag_id);
+                return (
+                  <tr key={menu.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                    <td style={{ padding: '10px' }}>{tagObj ? tagObj.name : '-'}</td>
+                    <td style={{ padding: '10px' }}>{menu.name}</td>
+                    <td style={{ padding: '10px', textAlign: 'right' }}>{menu.price.toLocaleString()}원</td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      <button onClick={() => handleDeleteMenu(menu.id)} style={{ padding: '4px 8px', backgroundColor: '#fa5252', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* 4. 가게/배달 관리 탭 */}
-      {activeTab === 'categoryMgmt' && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '300px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <h3 style={{ marginTop: 0, fontSize: '16px' }}>가게 구분 관리</h3>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <input placeholder="예: 3호점, 강남점" value={newStoreInput} onChange={e => setNewStoreInput(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <button onClick={handleAddStoreTag} style={{ padding: '10px 16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
+      {/* [4] 가게/배달 관리 탭 */}
+      {currentTab === 'store' && (
+        <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* 가게 구분 관리 */}
+          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+            <h3 style={{ marginTop: 0 }}>가게 구분 관리</h3>
+            <form onSubmit={handleAddStoreTag} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <input
+                type="text"
+                placeholder="새 가게 이름 (예: 죽풍경)"
+                value={newStoreTagName}
+                onChange={(e) => setNewStoreTagName(e.target.value)}
+                style={{ flex: 1, padding: '8px', border: '1px solid #ced4da', borderRadius: '4px' }}
+              />
+              <button type="submit" style={{ padding: '8px 15px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>추가</button>
+            </form>
+            <ul style={{ paddingLeft: '20px', margin: 0 }}>
+              {storeTags.map(tag => (
+                <li key={tag.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span>{tag.name}</span>
+                  <button onClick={() => handleDeleteStoreTag(tag.id)} style={{ padding: '3px 8px', backgroundColor: '#fa5252', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* 배달 구분 관리 */}
+          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+            <h3 style={{ marginTop: 0 }}>주문/배달 구분 관리</h3>
+            <form onSubmit={handleAddOrderType} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <input
+                type="text"
+                placeholder="새 주문 구분 (예: 배달의민족)"
+                value={newOrderTypeName}
+                onChange={(e) => setNewOrderTypeName(e.target.value)}
+                style={{ flex: 1, padding: '8px', border: '1px solid #ced4da', borderRadius: '4px' }}
+              />
+              <button type="submit" style={{ padding: '8px 15px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>추가</button>
+            </form>
+            <ul style={{ paddingLeft: '20px', margin: 0 }}>
+              {orderTypes.map(ot => (
+                <li key={ot.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span>{ot.name}</span>
+                  <button onClick={() => handleDeleteOrderType(ot.id)} style={{ padding: '3px 8px', backgroundColor: '#fa5252', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* 주문 수정 모달 팝업 */}
+      {editingOrder && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '15px' }}>주문 수정</h3>
+            
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ fontSize: '13px', color: '#6c757d', display: 'block', marginBottom: '5px' }}>결제 수단</label>
+              <select
+                value={editingOrder.payment_type}
+                onChange={(e) => setEditingOrder({ ...editingOrder, payment_type: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px' }}
+              >
+                <option value="카드">카드</option>
+                <option value="현금">현금</option>
+              </select>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {storeTags.map((st, idx) => (
-                <div key={st.id} draggable onDragStart={() => setDraggedStoreIdx(idx)} onDragOver={e => e.preventDefault()} onDrop={() => handleGenericDrop(storeTags, setStoreTags, draggedStoreIdx, idx)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'grab' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold' }}>{st.name}</span></div>
-                  <button onClick={() => handleDeleteStoreTag(st.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ fontSize: '13px', color: '#6c757d', display: 'block', marginBottom: '5px' }}>주문 상품 목록</label>
+              {editingOrder.order_items.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', backgroundColor: '#f8f9fa', padding: '8px', borderRadius: '4px' }}>
+                  <span>{item.menus ? item.menus.name : '할인/기타'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button 
+                      onClick={() => {
+                        const newItems = [...editingOrder.order_items];
+                        if (newItems[idx].quantity > 1) {
+                          newItems[idx].quantity -= 1;
+                          setEditingOrder({ ...editingOrder, order_items: newItems });
+                        }
+                      }}
+                      style={{ width: '22px', height: '22px' }}
+                    >-</button>
+                    <span>{item.quantity}개</span>
+                    <button 
+                      onClick={() => {
+                        const newItems = [...editingOrder.order_items];
+                        newItems[idx].quantity += 1;
+                        setEditingOrder({ ...editingOrder, order_items: newItems });
+                      }}
+                      style={{ width: '22px', height: '22px' }}
+                    >+</button>
+                    <span style={{ width: '60px', textAlign: 'right' }}>{(item.price * item.quantity).toLocaleString()}원</span>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
 
-          <div style={{ flex: 1, minWidth: '300px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <h3 style={{ marginTop: 0, fontSize: '16px' }}>배달 구분 관리</h3>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <input placeholder="예: 배달의민족, 요기요" value={newOrderTypeInput} onChange={e => setNewOrderTypeInput(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <button onClick={handleAddOrderType} style={{ padding: '10px 16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold', marginBottom: '20px' }}>
+              <span>수정된 총 금액</span>
+              <span style={{ color: '#007bff' }}>
+                {editingOrder.order_items.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString()}원
+              </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {orderTypes.map((ot, idx) => (
-                <div key={ot.id} draggable onDragStart={() => setDraggedOrderTypeIdx(idx)} onDragOver={e => e.preventDefault()} onDrop={() => handleGenericDrop(orderTypes, setOrderTypes, draggedOrderTypeIdx, idx)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'grab' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold' }}>{ot.name}</span></div>
-                  <button onClick={() => handleDeleteOrderType(ot.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* 금액 할인 추가 모달 */}
-      {isDiscountModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '340px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>금액 할인 추가</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>할인 항목명</label>
-              <input value={discountName} onChange={e => setDiscountName(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>할인 금액 (원)</label>
-              <input type="number" placeholder="예: 2000" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsDiscountModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={addDiscountToCart} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>추가</button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleUpdateOrderSubmit}
+                style={{ flex: 1, padding: '10px', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                저장하기
+              </button>
+              <button
+                onClick={() => setEditingOrder(null)}
+                style={{ flex: 1, padding: '10px', backgroundColor: '#6c757d', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                취소
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* 메뉴 등록 모달 */}
-      {isCreateModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>새 메뉴 등록</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
-              <select value={newMenu.store_tag} onChange={e => setNewMenu({ ...newMenu, store_tag: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
-                <option value="">선택해주세요</option>
-                {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
-              </select>
-            </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
-              <input placeholder="예: 소고기죽" value={newMenu.name} onChange={e => setNewMenu({ ...newMenu, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
-              <input type="number" placeholder="예: 10000" value={newMenu.price} onChange={e => setNewMenu({ ...newMenu, price: Number(e.target.value) })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsCreateModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={handleCreateMenu} style={{ flex: 1, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>등록</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 메뉴 수정 모달 */}
-      {editingMenuModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>메뉴 수정</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
-              <select value={editingMenuModal.store_tag} onChange={e => setEditingMenuModal({ ...editingMenuModal, store_tag: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
-                <option value="">선택해주세요</option>
-                {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
-              </select>
-            </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
-              <input value={editingMenuModal.name} onChange={e => setEditingMenuModal({ ...editingMenuModal, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
-              <input type="number" value={editingMenuModal.price} onChange={e => setEditingMenuModal({ ...editingMenuModal, price: Number(e.target.value) })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setEditingMenuModal(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={handleUpdateMenuModal} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
