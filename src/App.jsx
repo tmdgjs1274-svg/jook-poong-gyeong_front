@@ -6,7 +6,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('pos');
   const [menus, setMenus] = useState([]);
-  const [categories, setCategories] = useState([]); // 카테고리 목록 state 추가
+  const [categories, setCategories] = useState([]); 
   const [cart, setCart] = useState([]);
   const [orderType, setOrderType] = useState(null); 
   const [paymentType, setPaymentType] = useState('카드'); 
@@ -17,7 +17,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [selectedPosStore, setSelectedPosStore] = useState('전체');
-  const [selectedPosCategory, setSelectedPosCategory] = useState('전체'); // POS 화면 카테고리 필터 state 추가
+  const [selectedPosCategory, setSelectedPosCategory] = useState('전체'); 
   const [selectedMgmtStore, setSelectedMgmtStore] = useState('전체');
 
   // 일매출 정산 state
@@ -56,7 +56,7 @@ export default function App() {
   const [draggedMenuIdx, setDraggedMenuIdx] = useState(null);
   const [draggedStoreIdx, setDraggedStoreIdx] = useState(null);
   const [draggedOrderTypeIdx, setDraggedOrderTypeIdx] = useState(null);
-  const [draggedCategoryIdx, setDraggedCategoryIdx] = useState(null); // 카테고리 드래그 state 추가
+  const [draggedCategoryIdx, setDraggedCategoryIdx] = useState(null); 
 
   const API_BASE_URL = 'https://jook-poong-gyeong.onrender.com/api';
 
@@ -71,23 +71,39 @@ export default function App() {
     }
   }, [activeTab, selectedDate]);
 
+  // 관리 탭의 가게 선택이 바뀔 때 해당 가게의 카테고리를 불러오도록 연동
+  useEffect(() => {
+    fetchCategories(selectedMgmtStore);
+  }, [selectedMgmtStore]);
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 2500);
   };
 
+  const fetchCategories = async (storeTag = '전체') => {
+    try {
+      const url = storeTag && storeTag !== '전체' 
+        ? `${API_BASE_URL}/categories?store_tag=${encodeURIComponent(storeTag)}`
+        : `${API_BASE_URL}/categories`;
+      const res = await axios.get(url);
+      setCategories(res.data);
+    } catch (err) {
+      console.error('카테고리 조회 실패:', err);
+    }
+  };
+
   const fetchInitialData = async () => {
     try {
-      const [mRes, stRes, otRes, catRes] = await Promise.all([
+      const [mRes, stRes, otRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/menus`),
         axios.get(`${API_BASE_URL}/store-tags`),
         axios.get(`${API_BASE_URL}/order-types`),
-        axios.get(`${API_BASE_URL}/categories`) // 카테고리 데이터 조회 추가
       ]);
       setMenus(mRes.data);
       setStoreTags(stRes.data);
       setOrderTypes(otRes.data);
-      setCategories(catRes.data);
+      fetchCategories(selectedMgmtStore);
       if (otRes.data.length > 0 && !orderType) {
         setOrderType(otRes.data[0].id);
       }
@@ -181,13 +197,25 @@ export default function App() {
     }
   };
 
-  // --- 카테고리 관리 함수 추가 ---
+  // --- 카테고리 관리 함수 수정 (선택된 가게 기준 등록) ---
   const handleAddCategory = async () => {
     if (!newCategoryInput) return;
-    await axios.post(`${API_BASE_URL}/categories`, { name: newCategoryInput });
-    setNewCategoryInput('');
-    showToast('카테고리가 추가되었습니다.');
-    fetchInitialData();
+    if (selectedMgmtStore === '전체') {
+      return alert('카테고리를 추가할 특정 가게를 먼저 선택해주세요!');
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/categories`, { 
+        name: newCategoryInput, 
+        store_tag: selectedMgmtStore 
+      });
+      setNewCategoryInput('');
+      showToast('카테고리가 추가되었습니다.');
+      fetchCategories(selectedMgmtStore);
+      fetchInitialData();
+    } catch (err) {
+      alert(`카테고리 추가 실패: ${err.response?.data?.error || err.message}`);
+    }
   };
 
   const handleDeleteCategory = async (id) => {
@@ -195,6 +223,7 @@ export default function App() {
     try {
       await axios.delete(`${API_BASE_URL}/categories/${id}`);
       showToast('카테고리가 삭제되었습니다.');
+      fetchCategories(selectedMgmtStore);
       fetchInitialData();
     } catch (err) {
       alert('삭제 실패');
@@ -219,7 +248,6 @@ export default function App() {
     }
   };
 
-  // --- 가게/배달 구분 순서 변경 및 저장 함수 ---
   const handleStoreTagDrop = async (dragIdx, dropIdx) => {
     if (dragIdx === null || dragIdx === dropIdx) return;
     const newList = [...storeTags];
@@ -302,21 +330,19 @@ export default function App() {
     fetchInitialData();
   };
 
-const handleUpdateMenuModal = async () => {
-  const payload = {
-    name: editingMenuModal.name,
-    price: editingMenuModal.price,
-    store_tag: editingMenuModal.store_tag,
-    category_id: editingMenuModal.category_id === '' ? null : Number(editingMenuModal.category_id) // 숫자로 명시적 변환
+  const handleUpdateMenuModal = async () => {
+    const payload = {
+      name: editingMenuModal.name,
+      price: editingMenuModal.price,
+      store_tag: editingMenuModal.store_tag,
+      category_id: editingMenuModal.category_id === '' ? null : Number(editingMenuModal.category_id)
+    };
+
+    await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, payload);
+    showToast('✅ 메뉴가 수정되었습니다.');
+    setEditingMenuModal(null);
+    fetchInitialData();
   };
-
-  console.log("보내는 데이터:", payload); // F12 개발자 도구 콘솔에서 확인
-
-  await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, payload);
-  showToast('✅ 메뉴가 수정되었습니다.');
-  setEditingMenuModal(null);
-  fetchInitialData();
-};
 
   const handleDeleteMenu = async (id) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
@@ -522,7 +548,6 @@ const handleUpdateMenuModal = async () => {
           </div>
 
           <div style={{ flex: '3 1 500px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            {/* 가게 구분 필터 */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
               <button onClick={() => setSelectedPosStore('전체')} style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: selectedPosStore === '전체' ? '#0f172a' : '#f1f5f9', color: selectedPosStore === '전체' ? '#fff' : '#64748b', fontWeight: 'bold' }}>가게 전체</button>
               {storeTags.map(tag => (
@@ -530,7 +555,6 @@ const handleUpdateMenuModal = async () => {
               ))}
             </div>
 
-            {/* 카테고리 필터 추가 */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto' }}>
               <button onClick={() => setSelectedPosCategory('전체')} style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', background: selectedPosCategory === '전체' ? '#2563eb' : '#f1f5f9', color: selectedPosCategory === '전체' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>카테고리 전체</button>
               <button onClick={() => setSelectedPosCategory('카테고리 없음')} style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', background: selectedPosCategory === '카테고리 없음' ? '#2563eb' : '#f1f5f9', color: selectedPosCategory === '카테고리 없음' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>카테고리 없음</button>
@@ -539,7 +563,6 @@ const handleUpdateMenuModal = async () => {
               ))}
             </div>
 
-            {/* 메뉴 목록 렌더링 (가게 + 카테고리 필터 적용) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
               {menus.filter(m => {
                 const storeMatch = selectedPosStore === '전체' || m.store_tag === selectedPosStore;
@@ -687,7 +710,6 @@ const handleUpdateMenuModal = async () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2 style={{ margin: 0, fontSize: '18px' }}>메뉴 세팅 및 관리</h2>
             <div style={{ display: 'flex', gap: '8px' }}>
-              {/* 카테고리 관리 팝업 오픈 버튼 추가 */}
               <button onClick={() => setIsCategoryModalOpen(true)} style={{ padding: '10px 18px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                 🏷️ 카테고리 관리
               </button>
@@ -788,11 +810,15 @@ const handleUpdateMenuModal = async () => {
         </div>
       )}
 
-      {/* 카테고리 관리 팝업 추가 */}
+      {/* 카테고리 관리 팝업 */}
       {isCategoryModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '400px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>🏷️ 메뉴 카테고리 관리</h3>
+            <h3 style={{ marginTop: 0, marginBottom: '8px' }}>🏷️ 메뉴 카테고리 관리</h3>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+              현재 선택된 가게: <strong style={{ color: '#2563eb' }}>{selectedMgmtStore}</strong>
+            </p>
+
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
               <input placeholder="예: 메인요리, 사이드, 음료" value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
               <button onClick={handleAddCategory} style={{ padding: '10px 16px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
@@ -995,7 +1021,7 @@ const handleUpdateMenuModal = async () => {
         </div>
       )}
 
-      {/* 새 메뉴 등록 모달 (카테고리 선택 포함) */}
+      {/* 새 메뉴 등록 모달 */}
       {isCreateModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
@@ -1007,7 +1033,6 @@ const handleUpdateMenuModal = async () => {
                 {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
             </div>
-            {/* 카테고리 선택 추가 (기본값: 카테고리 없음/빈값) */}
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
               <select value={newMenu.category_id} onChange={e => setNewMenu({ ...newMenu, category_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
@@ -1031,7 +1056,7 @@ const handleUpdateMenuModal = async () => {
         </div>
       )}
 
-      {/* 메뉴 수정 모달 (카테고리 선택 포함) */}
+      {/* 메뉴 수정 모달 */}
       {editingMenuModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
@@ -1043,7 +1068,6 @@ const handleUpdateMenuModal = async () => {
                 {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
             </div>
-            {/* 카테고리 수정 선택 추가 */}
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
               <select value={editingMenuModal.category_id} onChange={e => setEditingMenuModal({ ...editingMenuModal, category_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
