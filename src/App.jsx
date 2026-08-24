@@ -74,9 +74,9 @@ export default function App() {
   const [newGroupMultiple, setNewGroupMultiple] = useState(false);
   const [newOptionDraft, setNewOptionDraft] = useState({}); // { [group_id]: { name, price } }
 
-  // 주문 입력(POS) 화면 - 옵션이 있는 메뉴를 클릭했을 때 뜨는 옵션 선택 모달
-  // { menu, selections: { [group_id]: optionId | optionId[] } }
-  const [optionSelectModal, setOptionSelectModal] = useState(null);
+  // 주문 입력(POS) 화면 - 옵션이 있는 메뉴를 클릭했을 때 메뉴 선택 화면에서 바로 펼쳐지는 옵션 선택 영역
+  // { menuId, selections: { [group_id]: optionId | optionId[] } }
+  const [expandedMenuOptions, setExpandedMenuOptions] = useState(null);
 
   const API_BASE_URL = 'https://jook-poong-gyeong.onrender.com/api';
 
@@ -236,11 +236,17 @@ export default function App() {
     });
   };
 
-  // 메뉴 카드를 클릭했을 때: 부가옵션이 있으면 옵션 선택 모달을, 없으면 바로 장바구니 담기를 수행한다.
+  // 메뉴 카드를 클릭했을 때: 부가옵션이 있으면 메뉴 선택 화면에서 바로 옵션 선택 영역을 펼치고,
+  // 없으면 바로 장바구니에 담는다. 이미 펼쳐진 메뉴를 다시 클릭하면 접는다.
   const handleMenuCardClick = (menu) => {
     const groups = menu.options || [];
     if (groups.length === 0) {
       addPlainMenuToCart(menu);
+      return;
+    }
+
+    if (expandedMenuOptions?.menuId === menu.id) {
+      setExpandedMenuOptions(null);
       return;
     }
 
@@ -254,11 +260,11 @@ export default function App() {
         initialSelections[g.id] = g.allow_multiple ? [] : '';
       }
     });
-    setOptionSelectModal({ menu, selections: initialSelections });
+    setExpandedMenuOptions({ menuId: menu.id, selections: initialSelections });
   };
 
   const toggleOptionSelection = (group, optionId) => {
-    setOptionSelectModal(prev => {
+    setExpandedMenuOptions(prev => {
       if (!prev) return prev;
       const selections = { ...prev.selections };
       if (group.allow_multiple) {
@@ -273,10 +279,13 @@ export default function App() {
     });
   };
 
-  // 옵션 선택 모달에서 "장바구니 담기"를 눌렀을 때: 필수 옵션 검증 후 옵션이 반영된 금액/이름으로 장바구니에 추가한다.
+  // "장바구니 담기"를 눌렀을 때: 필수 옵션 검증 후 옵션이 반영된 금액으로 장바구니에 추가한다.
+  // 선택된 옵션들은 item.options에 그대로 담아두고, 표시는 장바구니 쪽에서 메뉴명 하위에 여러 줄로 풀어서 보여준다.
   const confirmOptionSelection = () => {
-    if (!optionSelectModal) return;
-    const { menu, selections } = optionSelectModal;
+    if (!expandedMenuOptions) return;
+    const menu = menus.find(m => m.id === expandedMenuOptions.menuId);
+    if (!menu) return;
+    const { selections } = expandedMenuOptions;
     const groups = menu.options || [];
 
     for (const g of groups) {
@@ -307,9 +316,6 @@ export default function App() {
     });
 
     const extraTotal = chosenOptions.reduce((sum, o) => sum + (o.extra_price || 0), 0);
-    const displayName = chosenOptions.length > 0
-      ? `${menu.name} (${chosenOptions.map(o => o.option_name).join(', ')})`
-      : menu.name;
     const cartKey = `menu-${menu.id}-opt-${chosenOptions.map(o => o.option_id).sort().join('_') || 'none'}`;
 
     setCart(prev => {
@@ -320,7 +326,7 @@ export default function App() {
       return [...prev, {
         cart_key: cartKey,
         menu_id: menu.id,
-        name: displayName,
+        name: menu.name,
         price: menu.price + extraTotal,
         quantity: 1,
         isDiscount: false,
@@ -328,7 +334,7 @@ export default function App() {
       }];
     });
 
-    setOptionSelectModal(null);
+    setExpandedMenuOptions(null);
   };
 
   const addDiscountToCart = () => {
@@ -777,9 +783,16 @@ export default function App() {
                 </thead>
                 <tbody>
                   {cart.map((item) => (
-                    <tr key={item.cart_key} style={{ borderBottom: '1px solid #f8fafc', height: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</td>
-                      <td>
+                    <tr key={item.cart_key} style={{ borderBottom: '1px solid #f8fafc', minHeight: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
+                      <td style={{ fontWeight: 'bold', verticalAlign: 'top', paddingTop: '8px', paddingBottom: '8px' }}>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                        {(item.options || []).map((o, i) => (
+                          <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px' }}>
+                            – {o.option_name}{o.extra_price > 0 ? ` (+${o.extra_price.toLocaleString()}원)` : ''}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
                         {!item.isDiscount ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                             <button onClick={() => updateQuantity(item.cart_key, -1)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>-</button>
@@ -790,8 +803,8 @@ export default function App() {
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: '8px' }}>
                         <button onClick={() => removeFromCart(item.cart_key)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>X</button>
                       </td>
                     </tr>
@@ -877,19 +890,81 @@ export default function App() {
                 const menuCatName = m.categories?.name || '카테고리 없음';
                 const catMatch = selectedPosCategory === '' || menuCatName === selectedPosCategory;
                 return storeMatch && catMatch;
-              }).map(m => (
-                <button key={m.id} onClick={() => handleMenuCardClick(m)} style={{ padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box', position: 'relative' }}>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '9px', background: '#dbeafe', color: '#1e40af', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
-                    <span style={{ fontSize: '9px', background: '#e0e7ff', color: '#3730a3', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span>
-                    {(m.options || []).length > 0 && (
-                      <span style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>옵션</span>
+              }).map(m => {
+                const isExpanded = expandedMenuOptions?.menuId === m.id;
+                return (
+                  <React.Fragment key={m.id}>
+                    <button onClick={() => handleMenuCardClick(m)} style={{ padding: '12px', background: isExpanded ? '#eff6ff' : '#f8fafc', border: isExpanded ? '2px solid #2563eb' : '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box', position: 'relative' }}>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '9px', background: '#dbeafe', color: '#1e40af', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
+                        <span style={{ fontSize: '9px', background: '#e0e7ff', color: '#3730a3', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span>
+                        {(m.options || []).length > 0 && (
+                          <span style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>옵션</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px', wordBreak: 'break-all' }}>{m.name}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
+                    </button>
+
+                    {isExpanded && (
+                      <div style={{ gridColumn: '1 / -1', background: '#eff6ff', border: '2px solid #2563eb', borderRadius: '10px', padding: '16px', boxSizing: 'border-box' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{m.name}</span>
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>기본가 {m.price.toLocaleString()}원 · 옵션을 선택해주세요</span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '14px' }}>
+                          {(m.options || []).map(group => (
+                            <div key={group.id}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{group.name}</span>
+                                {group.is_required && <span style={{ fontSize: '10px', color: '#fff', background: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>필수</span>}
+                                {group.allow_multiple && <span style={{ fontSize: '10px', color: '#3730a3', background: '#e0e7ff', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>중복선택가능</span>}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {(group.options || []).map(opt => {
+                                  const sel = expandedMenuOptions.selections[group.id];
+                                  const isSelected = group.allow_multiple ? (Array.isArray(sel) && sel.includes(opt.id)) : sel === opt.id;
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      onClick={() => toggleOptionSelection(group, opt.id)}
+                                      style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '9px 12px',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                                        background: isSelected ? '#dbeafe' : '#fff'
+                                      }}
+                                    >
+                                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: isSelected ? '#1d4ed8' : '#334155' }}>{opt.name}</span>
+                                      <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
+                                        {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                                {(group.options || []).length === 0 && (
+                                  <div style={{ fontSize: '11px', color: '#94a3b8', padding: '6px' }}>등록된 옵션이 없습니다.</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => setExpandedMenuOptions(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+                          <button onClick={confirmOptionSelection} style={{ flex: 2, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>장바구니 담기</button>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                  <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px', wordBreak: 'break-all' }}>{m.name}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
-                </button>
-              ))}
+                  </React.Fragment>
+                );
+              })}
             </div>
           </div>
 
@@ -1005,7 +1080,7 @@ export default function App() {
                             created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
                             order_items: order.order_items.map(item => ({
                               menu_id: item.menu_id,
-                              name: formatOrderItemLabel(item) || '할인/기타',
+                              name: item.menus?.name || '할인/기타',
                               price: item.price,
                               quantity: item.quantity,
                               isDiscount: item.menu_id === null || item.price < 0,
@@ -1071,7 +1146,7 @@ export default function App() {
                               created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
                               order_items: order.order_items.map(item => ({
                                 menu_id: item.menu_id,
-                                name: formatOrderItemLabel(item) || '할인/기타',
+                                name: item.menus?.name || '할인/기타',
                                 price: item.price,
                                 quantity: item.quantity,
                                 isDiscount: item.menu_id === null || item.price < 0,
@@ -1380,62 +1455,6 @@ export default function App() {
         </div>
       )}
 
-      {/* POS 메뉴 클릭 시 뜨는 부가옵션 선택 모달 */}
-      {optionSelectModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '380px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '4px', fontSize: '16px' }}>{optionSelectModal.menu.name}</h3>
-            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px' }}>기본가 {optionSelectModal.menu.price.toLocaleString()}원 · 옵션을 선택해주세요</p>
-
-            {(optionSelectModal.menu.options || []).map(group => (
-              <div key={group.id} style={{ marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{group.name}</span>
-                  {group.is_required && <span style={{ fontSize: '10px', color: '#fff', background: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>필수</span>}
-                  {group.allow_multiple && <span style={{ fontSize: '10px', color: '#3730a3', background: '#e0e7ff', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>중복선택가능</span>}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {(group.options || []).map(opt => {
-                    const sel = optionSelectModal.selections[group.id];
-                    const isSelected = group.allow_multiple ? (Array.isArray(sel) && sel.includes(opt.id)) : sel === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => toggleOptionSelection(group, opt.id)}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '10px 12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                          background: isSelected ? '#eff6ff' : '#fff'
-                        }}
-                      >
-                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: isSelected ? '#1d4ed8' : '#334155' }}>{opt.name}</span>
-                        <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
-                          {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  {(group.options || []).length === 0 && (
-                    <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>등록된 옵션이 없습니다.</div>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-              <button onClick={() => setOptionSelectModal(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
-              <button onClick={confirmOptionSelection} style={{ flex: 1, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>장바구니 담기</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* POS용 할인 모달 */}
       {isDiscountModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
@@ -1561,9 +1580,16 @@ export default function App() {
                 </thead>
                 <tbody>
                   {editingOrderModal.order_items.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', height: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold', fontSize: '12px' }}>{item.name}</td>
-                      <td>
+                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', color: item.isDiscount ? '#dc2626' : '#333' }}>
+                      <td style={{ fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px', paddingBottom: '8px' }}>
+                        <div>{item.name}</div>
+                        {(item.options || []).map((o, i) => (
+                          <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px' }}>
+                            – {o.option_name}{o.extra_price > 0 ? ` (+${o.extra_price.toLocaleString()}원)` : ''}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
                         {!item.isDiscount ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                             <button onClick={() => {
@@ -1584,8 +1610,8 @@ export default function App() {
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: '8px' }}>
                         <button onClick={() => {
                           setEditingOrderModal(prev => ({
                             ...prev,
