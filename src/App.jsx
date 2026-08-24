@@ -357,7 +357,7 @@ export default function App() {
 
   const handleAddStoreTag = async () => {
     if (!newStoreInput) return;
-    const res = await axios.post(`${API_BASE_URL}/store-tags`, { name: newStoreInput });
+    await axios.post(`${API_BASE_URL}/store-tags`, { name: newStoreInput });
     setNewStoreInput('');
     showToast('가게 구분이 추가되었습니다.');
     fetchInitialData();
@@ -476,7 +476,6 @@ export default function App() {
   });
 
   return (
-    // 너비를 모바일에서 100%로 풀고, 데스크탑일 땐 1200px 유지를 위해 isMobile 분기 처리 적용
     <div style={{ width: '100%', minWidth: isMobile ? '100%' : '1200px', margin: '0 auto', padding: '16px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
       
       {toastMessage && (
@@ -485,7 +484,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 상단 네비게이션: 모바일에서 버튼들이 깨지지 않도록 유연하게 배치 */}
+      {/* 상단 네비게이션 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '16px', backgroundColor: '#fff', padding: '12px 20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flexDirection: isMobile ? 'column' : 'row', gap: '12px' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'center' : 'flex-start' }}>
           <button onClick={() => setActiveTab('pos')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b' }}>주문 입력</button>
@@ -743,7 +742,8 @@ export default function App() {
                     <th style={{ width: '130px' }}>주문일시</th>
                     <th style={{ width: '110px' }}>결제 수단</th>
                     <th style={{ width: '120px' }}>배달 구분</th>
-                    <th style={{ textAlign: 'left', paddingLeft: '12px' }}>주문 상품 상세</th>
+                    {/* 주문 상품 상세 항목: 가로 스크롤 방지를 위해 줄바꿈 허용 설정 적용 */}
+                    <th style={{ textAlign: 'left', paddingLeft: '12px', minWidth: '220px' }}>주문 상품 상세</th>
                     <th style={{ width: '100px' }}>총 금액</th>
                     <th style={{ width: '110px' }}>관리</th>
                   </tr>
@@ -762,7 +762,7 @@ export default function App() {
                         onDragStart={() => setDraggedOrderIdx(idx)}
                         onDragOver={e => e.preventDefault()}
                         onDrop={() => handleGenericDrop(dailyOrders, setDailyOrders, draggedOrderIdx, idx)}
-                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '52px', background: '#fff', cursor: 'grab' }}
+                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', minHeight: '52px', background: '#fff', cursor: 'grab' }}
                       >
                         <td style={{ color: '#94a3b8', fontSize: '16px' }}>☰</td>
                         <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
@@ -776,7 +776,8 @@ export default function App() {
                             {order.order_types?.name || '매장'}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'left', paddingLeft: '12px', fontWeight: '500' }}>
+                        {/* 주문 상품 상세 리스트가 길어질 때 줄바꿈(두 줄 이상) 처리되도록 설정 */}
+                        <td style={{ textAlign: 'left', paddingLeft: '12px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', fontWeight: '500', whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: '1.4' }}>
                           {order.order_items?.map(i => `${i.menus?.name || '할인/기타'}(${i.quantity}개)`).join(', ')}
                         </td>
                         <td style={{ fontWeight: 'bold' }}>{order.total_amount.toLocaleString()}원</td>
@@ -863,7 +864,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* 모바일에서 메뉴 테이블이 깨지지 않게 가로 스크롤 허용 */}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '600px' }}>
               <thead>
