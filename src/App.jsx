@@ -463,7 +463,6 @@ export default function App() {
   });
 
   return (
-    /* 최상단 컨테이너 너비를 100% 및 모바일 퍼스트로 완벽히 고정 */
     <div style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden', margin: '0 auto', padding: '8px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
       
       {toastMessage && (
@@ -671,17 +670,35 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. 일매출 정산 */}
+      {/* 2. 일매출 정산 (일자 목록 드롭다운 적용) */}
       {activeTab === 'sales' && (
         <div style={{ display: 'flex', gap: '12px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
           <div style={{ width: '100%', background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
             <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>일자 목록</h3>
-            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', whiteSpace: 'nowrap' }}>
-              {dateList.map(date => (
-                <button key={date} onClick={() => setSelectedDate(date)} style={{ padding: '8px 12px', background: selectedDate === date ? '#2563eb' : '#f8fafc', color: selectedDate === date ? '#fff' : '#334155', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0, fontSize: '12px' }}>
-                  {date}
-                </button>
-              ))}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select 
+                value={selectedDate} 
+                onChange={e => setSelectedDate(e.target.value)} 
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  borderRadius: '8px', 
+                  border: '1px solid #cbd5e1', 
+                  fontSize: '13px', 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#f8fafc',
+                  color: '#1e293b',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                {dateList.length === 0 && <option value="">등록된 매출 날짜가 없습니다</option>}
+                {dateList.map(date => (
+                  <option key={date} value={date}>
+                    {date} {date === getTodayStr() ? '(오늘)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
