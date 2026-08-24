@@ -41,8 +41,9 @@ export default function App() {
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newMenu, setNewMenu] = useState({ name: '', price: '', store_tag: '', category_id: '' });
+  const [newMenu, setNewMenu] = useState({ name: '', price: '', store_tag: '', category_id: '', option_group_ids: [] });
   const [modalCategories, setModalCategories] = useState([]);
+  const [modalOptionGroups, setModalOptionGroups] = useState([]); // 메뉴 등록/수정 모달에서 선택 가능한 가게의 옵션 그룹 목록
   const [editingMenuModal, setEditingMenuModal] = useState(null);
   const [newStoreInput, setNewStoreInput] = useState('');
   const [newOrderTypeInput, setNewOrderTypeInput] = useState('');
@@ -64,9 +65,10 @@ export default function App() {
   const [draggedOrderTypeIdx, setDraggedOrderTypeIdx] = useState(null);
   const [draggedCategoryIdx, setDraggedCategoryIdx] = useState(null);
 
-  // ===== 메뉴 부가옵션(옵션 그룹 / 옵션) 관련 상태 =====
-  // 메뉴 관리 화면 - "옵션관리" 모달에서 대상 메뉴 id만 들고 있고, 실제 데이터는 항상 menus 배열에서 최신값을 참조한다.
-  const [optionMenuModalId, setOptionMenuModalId] = useState(null);
+  // ===== 부가옵션(옵션 그룹 / 옵션) 관련 상태 =====
+  // 카테고리와 마찬가지로 "가게(selectedMgmtStore)" 하위에 공통으로 귀속되는 리소스다.
+  const [isOptionGroupModalOpen, setIsOptionGroupModalOpen] = useState(false);
+  const [optionGroups, setOptionGroups] = useState([]); // 메뉴 관리 탭에서 선택된 가게(selectedMgmtStore)의 옵션 그룹 목록
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupRequired, setNewGroupRequired] = useState(false);
   const [newGroupMultiple, setNewGroupMultiple] = useState(false);
@@ -92,6 +94,7 @@ export default function App() {
   useEffect(() => {
     if (selectedMgmtStore) {
       fetchCategories(selectedMgmtStore);
+      fetchOptionGroups(selectedMgmtStore);
       setSelectedMgmtCategory('전체');
     }
   }, [selectedMgmtStore]);
@@ -115,14 +118,17 @@ export default function App() {
   useEffect(() => {
     if (newMenu.store_tag) {
       fetchModalCategories(newMenu.store_tag);
+      fetchModalOptionGroups(newMenu.store_tag);
     } else {
       setModalCategories([]);
+      setModalOptionGroups([]);
     }
   }, [newMenu.store_tag]);
 
   useEffect(() => {
     if (editingMenuModal?.store_tag) {
       fetchModalCategories(editingMenuModal.store_tag);
+      fetchModalOptionGroups(editingMenuModal.store_tag);
     }
   }, [editingMenuModal?.store_tag]);
 
@@ -150,6 +156,28 @@ export default function App() {
       setModalCategories(res.data);
     } catch (err) {
       console.error('모달 카테고리 조회 실패:', err);
+    }
+  };
+
+  // 메뉴 관리 탭의 "옵션 관리" 모달용 - 선택된 가게(selectedMgmtStore)의 옵션 그룹 목록
+  const fetchOptionGroups = async (storeTag) => {
+    if (!storeTag) return setOptionGroups([]);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/option-groups?store_tag=${encodeURIComponent(storeTag)}`);
+      setOptionGroups(res.data);
+    } catch (err) {
+      console.error('옵션 그룹 조회 실패:', err);
+    }
+  };
+
+  // 메뉴 등록/수정 모달에서 "이 가게의 옵션 그룹 중 어떤 걸 이 메뉴에 적용할지" 고를 목록
+  const fetchModalOptionGroups = async (storeTag) => {
+    if (!storeTag) return setModalOptionGroups([]);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/option-groups?store_tag=${encodeURIComponent(storeTag)}`);
+      setModalOptionGroups(res.data);
+    } catch (err) {
+      console.error('모달 옵션 그룹 조회 실패:', err);
     }
   };
 
@@ -507,7 +535,8 @@ export default function App() {
       name: editingMenuModal.name,
       price: editingMenuModal.price,
       store_tag: editingMenuModal.store_tag,
-      category_id: editingMenuModal.category_id === '' ? null : Number(editingMenuModal.category_id)
+      category_id: editingMenuModal.category_id === '' ? null : Number(editingMenuModal.category_id),
+      option_group_ids: editingMenuModal.option_group_ids || []
     };
 
     await axios.put(`${API_BASE_URL}/menus/${editingMenuModal.id}`, payload);
@@ -561,12 +590,20 @@ export default function App() {
     }
   };
 
-  // ===== 메뉴 부가옵션 관리 (메뉴 관리 탭 - 옵션관리 모달) =====
+  // ===== 부가옵션 관리 (메뉴 관리 탭 - "옵션 관리" 모달, 가게(selectedMgmtStore) 하위 공통 리소스) =====
+  const refreshOptionGroupsEverywhere = () => {
+    // 옵션 관리 모달 목록 + 메뉴 목록(각 메뉴에 연결된 그룹 카운트/내용) 을 함께 최신화한다.
+    fetchOptionGroups(selectedMgmtStore);
+    fetchInitialData();
+  };
+
   const handleAddOptionGroup = async () => {
-    if (!newGroupName || !optionMenuModalId) return alert('옵션 그룹명을 입력해주세요.');
+    if (!newGroupName) return alert('옵션 그룹명을 입력해주세요.');
+    if (!selectedMgmtStore) return alert('옵션 그룹을 추가할 가게를 먼저 선택해주세요!');
     try {
-      await axios.post(`${API_BASE_URL}/menus/${optionMenuModalId}/option-groups`, {
+      await axios.post(`${API_BASE_URL}/option-groups`, {
         name: newGroupName,
+        store_tag: selectedMgmtStore,
         is_required: newGroupRequired,
         allow_multiple: newGroupMultiple
       });
@@ -574,18 +611,18 @@ export default function App() {
       setNewGroupRequired(false);
       setNewGroupMultiple(false);
       showToast('옵션 그룹이 추가되었습니다.');
-      fetchInitialData();
+      refreshOptionGroupsEverywhere();
     } catch (err) {
       alert(`옵션 그룹 추가 실패: ${err.response?.data?.error || err.message}`);
     }
   };
 
   const handleDeleteOptionGroup = async (groupId) => {
-    if (!window.confirm('이 옵션 그룹과 하위 옵션을 모두 삭제하시겠습니까?')) return;
+    if (!window.confirm('이 옵션 그룹과 하위 옵션을 모두 삭제하시겠습니까? 이 그룹을 사용 중인 메뉴에서도 함께 제거됩니다.')) return;
     try {
-      await axios.delete(`${API_BASE_URL}/menus/${optionMenuModalId}/option-groups/${groupId}`);
+      await axios.delete(`${API_BASE_URL}/option-groups/${groupId}`);
       showToast('옵션 그룹이 삭제되었습니다.');
-      fetchInitialData();
+      refreshOptionGroupsEverywhere();
     } catch (err) {
       alert('삭제 실패');
     }
@@ -595,24 +632,24 @@ export default function App() {
     const draft = newOptionDraft[groupId] || { name: '', price: '' };
     if (!draft.name) return alert('옵션명을 입력해주세요.');
     try {
-      await axios.post(`${API_BASE_URL}/menus/${optionMenuModalId}/option-groups/${groupId}/options`, {
+      await axios.post(`${API_BASE_URL}/option-groups/${groupId}/items`, {
         name: draft.name,
         extra_price: draft.price === '' || draft.price === undefined ? 0 : Number(draft.price)
       });
       setNewOptionDraft(prev => ({ ...prev, [groupId]: { name: '', price: '' } }));
       showToast('옵션이 추가되었습니다.');
-      fetchInitialData();
+      refreshOptionGroupsEverywhere();
     } catch (err) {
       alert(`옵션 추가 실패: ${err.response?.data?.error || err.message}`);
     }
   };
 
-  const handleDeleteOption = async (groupId, optionId) => {
+  const handleDeleteOption = async (optionId) => {
     if (!window.confirm('이 옵션을 삭제하시겠습니까?')) return;
     try {
-      await axios.delete(`${API_BASE_URL}/menus/${optionMenuModalId}/option-groups/${groupId}/options/${optionId}`);
+      await axios.delete(`${API_BASE_URL}/option-items/${optionId}`);
       showToast('옵션이 삭제되었습니다.');
-      fetchInitialData();
+      refreshOptionGroupsEverywhere();
     } catch (err) {
       alert('삭제 실패');
     }
@@ -640,8 +677,6 @@ export default function App() {
     const paymentMatch = filterPaymentType === '전체' || order.payment_type === filterPaymentType;
     return storeMatch && typeMatch && paymentMatch;
   });
-
-  const activeOptionMenu = optionMenuModalId ? menus.find(m => m.id === optionMenuModalId) : null;
 
   return (
     <div style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden', margin: '0 auto', padding: '12px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
@@ -1065,7 +1100,10 @@ export default function App() {
               <button onClick={() => setIsCategoryModalOpen(true)} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
                 🏷️ 카테고리 관리
               </button>
-              <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: selectedMgmtStore || '', category_id: '' }); setIsCreateModalOpen(true); }} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+              <button onClick={() => setIsOptionGroupModalOpen(true)} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                🧩 옵션 관리
+              </button>
+              <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: selectedMgmtStore || '', category_id: '', option_group_ids: [] }); setIsCreateModalOpen(true); }} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
                 + 메뉴 등록
               </button>
             </div>
@@ -1147,11 +1185,14 @@ export default function App() {
                       {(m.options || []).length > 0 ? `${m.options.length}개` : '없음'}
                     </td>
                     <td>
-                      <button onClick={() => setOptionMenuModalId(m.id)} style={{ marginRight: '4px', padding: '5px 8px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>옵션관리</button>
                       <button onClick={() => {
                         const initialCatId = m.categories?.id || m.category_id || '';
-                        setEditingMenuModal({ ...m, category_id: initialCatId });
-                        if (m.store_tag) fetchModalCategories(m.store_tag);
+                        const initialOptionGroupIds = (m.options || []).map(g => g.id);
+                        setEditingMenuModal({ ...m, category_id: initialCatId, option_group_ids: initialOptionGroupIds });
+                        if (m.store_tag) {
+                          fetchModalCategories(m.store_tag);
+                          fetchModalOptionGroups(m.store_tag);
+                        }
                       }} style={{ marginRight: '4px', padding: '5px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
                       <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '5px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
                     </td>
@@ -1249,23 +1290,23 @@ export default function App() {
         </div>
       )}
 
-      {/* 메뉴 부가옵션 관리 모달 (메뉴 관리 탭 - "옵션관리" 버튼) */}
-      {activeOptionMenu && (
+      {/* 부가옵션 관리 모달 (메뉴 관리 탭 - "옵션 관리" 버튼, 가게 하위 공통 리소스) */}
+      {isOptionGroupModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '460px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
             <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>🧩 부가옵션 관리</h3>
             <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
-              대상 메뉴: <strong style={{ color: '#2563eb' }}>{activeOptionMenu.name}</strong> (기본가 {activeOptionMenu.price.toLocaleString()}원)
+              현재 선택된 가게: <strong style={{ color: '#2563eb' }}>{selectedMgmtStore}</strong> · 여기서 만든 옵션 그룹은 메뉴 등록/수정 시 선택해서 붙일 수 있습니다.
             </p>
 
-            {(activeOptionMenu.options || []).length === 0 && (
+            {optionGroups.length === 0 && (
               <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px', textAlign: 'center', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
                 등록된 옵션 그룹이 없습니다. 아래에서 새 옵션 그룹을 추가해주세요.<br />
                 (예: "곱빼기 선택" - 기본/곱빼기, "면 종류 선택" - 칼국수/수제비/칼제비)
               </div>
             )}
 
-            {(activeOptionMenu.options || []).map(group => (
+            {optionGroups.map(group => (
               <div key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <div>
@@ -1278,18 +1319,18 @@ export default function App() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
-                  {(group.options || []).map(opt => (
+                  {(group.option_items || []).map(opt => (
                     <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px' }}>
                       <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
                           {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
                         </span>
-                        <button onClick={() => handleDeleteOption(group.id, opt.id)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>X</button>
+                        <button onClick={() => handleDeleteOption(opt.id)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>X</button>
                       </div>
                     </div>
                   ))}
-                  {(group.options || []).length === 0 && (
+                  {(group.option_items || []).length === 0 && (
                     <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>옵션이 없습니다.</div>
                   )}
                 </div>
@@ -1334,7 +1375,7 @@ export default function App() {
               <button onClick={handleAddOptionGroup} style={{ width: '100%', padding: '10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>옵션 그룹 추가</button>
             </div>
 
-            <button onClick={() => setOptionMenuModalId(null)} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', marginTop: '14px' }}>닫기</button>
+            <button onClick={() => setIsOptionGroupModalOpen(false)} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', marginTop: '14px' }}>닫기</button>
           </div>
         </div>
       )}
@@ -1600,6 +1641,37 @@ export default function App() {
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
               <input type="number" placeholder="예: 10000" value={newMenu.price} onChange={e => setNewMenu({ ...newMenu, price: Number(e.target.value) })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '6px' }}>부가옵션</label>
+              {!newMenu.store_tag ? (
+                <div style={{ fontSize: '11px', color: '#94a3b8', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>가게를 먼저 선택해주세요.</div>
+              ) : modalOptionGroups.length === 0 ? (
+                <div style={{ fontSize: '11px', color: '#94a3b8', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>
+                  이 가게에 등록된 옵션 그룹이 없습니다. (메뉴 관리 화면의 "옵션 관리"에서 먼저 만들어주세요)
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px' }}>
+                  {modalOptionGroups.map(group => {
+                    const checked = (newMenu.option_group_ids || []).includes(group.id);
+                    return (
+                      <label key={group.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setNewMenu(prev => {
+                            const current = prev.option_group_ids || [];
+                            const next = checked ? current.filter(id => id !== group.id) : [...current, group.id];
+                            return { ...prev, option_group_ids: next };
+                          })}
+                        />
+                        <span style={{ fontWeight: 'bold' }}>{group.name}</span>
+                        <span style={{ color: '#94a3b8' }}>({(group.option_items || []).length}개 옵션{group.is_required ? ' · 필수' : ''})</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setIsCreateModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
               <button onClick={handleCreateMenu} style={{ flex: 1, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>등록</button>
@@ -1634,6 +1706,37 @@ export default function App() {
             <div style={{ marginBottom: '18px' }}>
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
               <input type="number" value={editingMenuModal.price} onChange={e => setEditingMenuModal({ ...editingMenuModal, price: Number(e.target.value) })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
+            </div>
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '6px' }}>부가옵션</label>
+              {!editingMenuModal.store_tag ? (
+                <div style={{ fontSize: '11px', color: '#94a3b8', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>가게를 먼저 선택해주세요.</div>
+              ) : modalOptionGroups.length === 0 ? (
+                <div style={{ fontSize: '11px', color: '#94a3b8', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>
+                  이 가게에 등록된 옵션 그룹이 없습니다. (메뉴 관리 화면의 "옵션 관리"에서 먼저 만들어주세요)
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px' }}>
+                  {modalOptionGroups.map(group => {
+                    const checked = (editingMenuModal.option_group_ids || []).includes(group.id);
+                    return (
+                      <label key={group.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setEditingMenuModal(prev => {
+                            const current = prev.option_group_ids || [];
+                            const next = checked ? current.filter(id => id !== group.id) : [...current, group.id];
+                            return { ...prev, option_group_ids: next };
+                          })}
+                        />
+                        <span style={{ fontWeight: 'bold' }}>{group.name}</span>
+                        <span style={{ color: '#94a3b8' }}>({(group.option_items || []).length}개 옵션{group.is_required ? ' · 필수' : ''})</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setEditingMenuModal(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
