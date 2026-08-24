@@ -483,7 +483,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* 1. POS 영역 (PC: 좌우 형태 / 모바일: 세로 형태 분기 처리) */}
+      {/* 1. POS 영역 */}
       {activeTab === 'pos' && (
         <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row', boxSizing: 'border-box', width: '100%', alignItems: 'flex-start' }}>
           
@@ -606,7 +606,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 메뉴 선택 패널 */}
+          {/* 메뉴 선택 패널 (넓어진 화면에서 가로 공간을 꽉 채우도록 확장) */}
           <div style={{ flex: 1, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: '100%' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
               {storeTags.map(tag => (
@@ -652,7 +652,7 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
               {menus.filter(m => {
                 const storeMatch = !selectedPosStore || m.store_tag === selectedPosStore;
                 const menuCatName = m.categories?.name || '카테고리 없음';
@@ -674,7 +674,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. 일매출 정산 (필터 구성 좌우 변경 완료) */}
+      {/* 2. 일매출 정산 (헤더-필터 좌우 구성 및 명칭 '가게구분'으로 변경 완료) */}
       {activeTab === 'sales' && (
         <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
           <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
@@ -709,12 +709,12 @@ export default function App() {
           <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
             <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
             
-            {/* 좌우 배치형 필터 구성 영역 */}
+            {/* 좌우 배치형 필터 구성 영역 및 '가게구분' 명칭 변경 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box' }}>
               
               {/* 가게 구분 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>저장일자 - 가게</span>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>가게구분</span>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   <button onClick={() => setFilterStore('전체')} style={{ padding: '5px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
                   {storeTags.map(st => (
@@ -1245,7 +1245,7 @@ export default function App() {
                 {modalCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px' }, { width: '100%' }}>
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
               <input value={editingMenuModal.name} onChange={e => setEditingMenuModal({ ...editingMenuModal, name: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
