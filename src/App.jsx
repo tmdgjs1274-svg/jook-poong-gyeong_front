@@ -496,14 +496,16 @@ export default function App() {
               </button>
             </div>
             
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>저장 일자</label>
-              <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            {/* [개선 2 반영] 저장 일자: 좌우 배치 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0 }}>저장 일자</label>
+              <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 / 배달 구분</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {/* [개선 2 반영] 주문 / 배달 구분: 좌우 배치 */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0, paddingTop: '6px' }}>주문 / 배달 구분</label>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
                 {orderTypes.map(ot => (
                   <button
                     key={ot.id}
@@ -525,9 +527,10 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>결제 구분</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
+            {/* [개선 2 반영] 결제 구분: 좌우 배치 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0 }}>결제 구분</label>
+              <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
                 {['카드', '현금'].map(pt => (
                   <button
                     key={pt}
@@ -709,33 +712,34 @@ export default function App() {
           <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
             <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box' }}>
+            {/* [개선 1 반영] 필터 영역 가로 배열 (Flexbox 활용, 화면이 넓으면 한 줄로 자연스럽게 배치) */}
+            <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
               
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>가게구분</span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  <button onClick={() => setFilterStore('전체')} style={{ padding: '5px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
                   {storeTags.map(st => (
-                    <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '5px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{st.name}</button>
+                    <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{st.name}</button>
                   ))}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>배달 구분</span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  <button onClick={() => setFilterOrderType('전체')} style={{ padding: '5px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
                   {orderTypes.map(ot => (
-                    <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '5px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
+                    <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
                   ))}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>결제 수단</span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                   {['전체', '카드', '현금'].map(pt => (
-                    <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '5px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155', fontWeight: 'bold' }}>{pt}</button>
+                    <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155', fontWeight: 'bold' }}>{pt}</button>
                   ))}
                 </div>
               </div>
@@ -753,52 +757,30 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto', width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '600px' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
-                    <th style={{ width: '30px' }}></th>
-                    <th style={{ width: '110px' }}>주문일시</th>
-                    <th style={{ width: '75px' }}>결제</th>
-                    <th style={{ width: '85px' }}>구분</th>
-                    <th style={{ textAlign: 'left', paddingLeft: '10px', minWidth: '180px' }}>상세 내역</th>
-                    <th style={{ width: '90px' }}>금액</th>
-                    <th style={{ width: '95px' }}>관리</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDailyOrders.map((order, idx) => {
-                    const dateObj = new Date(order.created_at);
-                    const formattedTime = !isNaN(dateObj.getTime()) 
-                      ? `${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
-                      : order.created_at;
+            {/* [개선 3 반영] 테이블 가로스크롤 방지 및 모바일/좁은 화면 대응 2열 카드 배열 (isMobile 여부에 따라 동적 렌더링) */}
+            {isMobile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {filteredDailyOrders.map((order) => {
+                  const dateObj = new Date(order.created_at);
+                  const formattedTime = !isNaN(dateObj.getTime()) 
+                    ? `${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
+                    : order.created_at;
 
-                    return (
-                      <tr 
-                        key={order.id} 
-                        draggable 
-                        onDragStart={() => setDraggedOrderIdx(idx)}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={() => handleGenericDrop(dailyOrders, setDailyOrders, draggedOrderIdx, idx)}
-                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', background: '#fff' }}
-                      >
-                        <td style={{ color: '#94a3b8' }}>☰</td>
-                        <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
-                        <td>
-                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                            {order.payment_type || '카드'}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                            {order.order_types?.name || '매장'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'left', paddingLeft: '10px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', fontSize: '12px', whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: '1.4' }}>
-                          {order.order_items?.map(i => `${i.menus?.name || '할인'}(${i.quantity})`).join(', ')}
-                        </td>
-                        <td style={{ fontWeight: 'bold', fontSize: '12px' }}>{order.total_amount.toLocaleString()}원</td>
-                        <td>
+                  return (
+                    <div key={order.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', color: '#64748b' }}>
+                        <span>{formattedTime}</span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+                          <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', wordBreak: 'break-all' }}>
+                        {order.order_items?.map(i => `${i.menus?.name || '할인'}(${i.quantity})`).join(', ')}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#2563eb' }}>{order.total_amount.toLocaleString()}원</span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
                           <button onClick={() => setEditingOrderModal({
                             ...order,
                             created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
@@ -809,15 +791,81 @@ export default function App() {
                               quantity: item.quantity,
                               isDiscount: item.menu_id === null || item.price < 0
                             }))
-                          })} style={{ marginRight: '4px', padding: '5px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
-                          <button onClick={() => handleDeleteOrder(order.id)} style={{ padding: '5px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          })} style={{ padding: '4px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
+                          <button onClick={() => handleDeleteOrder(order.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '600px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
+                      <th style={{ width: '30px' }}></th>
+                      <th style={{ width: '110px' }}>주문일시</th>
+                      <th style={{ width: '75px' }}>결제</th>
+                      <th style={{ width: '85px' }}>구분</th>
+                      <th style={{ textAlign: 'left', paddingLeft: '10px', minWidth: '180px' }}>상세 내역</th>
+                      <th style={{ width: '90px' }}>금액</th>
+                      <th style={{ width: '95px' }}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDailyOrders.map((order, idx) => {
+                      const dateObj = new Date(order.created_at);
+                      const formattedTime = !isNaN(dateObj.getTime()) 
+                        ? `${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
+                        : order.created_at;
+
+                      return (
+                        <tr 
+                          key={order.id} 
+                          draggable 
+                          onDragStart={() => setDraggedOrderIdx(idx)}
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={() => handleGenericDrop(dailyOrders, setDailyOrders, draggedOrderIdx, idx)}
+                          style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', background: '#fff' }}
+                        >
+                          <td style={{ color: '#94a3b8' }}>☰</td>
+                          <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
+                          <td>
+                            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                              {order.payment_type || '카드'}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                              {order.order_types?.name || '매장'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'left', paddingLeft: '10px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', fontSize: '12px', whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: '1.4' }}>
+                            {order.order_items?.map(i => `${i.menus?.name || '할인'}(${i.quantity})`).join(', ')}
+                          </td>
+                          <td style={{ fontWeight: 'bold', fontSize: '12px' }}>{order.total_amount.toLocaleString()}원</td>
+                          <td>
+                            <button onClick={() => setEditingOrderModal({
+                              ...order,
+                              created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
+                              order_items: order.order_items.map(item => ({
+                                menu_id: item.menu_id,
+                                name: item.menus?.name || '할인/기타',
+                                price: item.price,
+                                quantity: item.quantity,
+                                isDiscount: item.menu_id === null || item.price < 0
+                              }))
+                            })} style={{ marginRight: '4px', padding: '5px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
+                            <button onClick={() => handleDeleteOrder(order.id)} style={{ padding: '5px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -925,9 +973,10 @@ export default function App() {
         </div>
       )}
 
-      {/* 4. 가게/배달 관리 탭 */}
+      {/* [개선 4 반영] 4. 가게/배달 관리 탭 - 화면이 넓을 때 좌우 2단 컬럼 구조로 배치 */}
       {activeTab === 'categoryMgmt' && (
-        <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: '16px', boxSizing: 'border-box', width: '100%', alignItems: 'start' }}>
+          
           <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
             <h3 style={{ marginTop: 0, fontSize: '16px' }}>가게 구분 관리</h3>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
@@ -973,6 +1022,7 @@ export default function App() {
               ))}
             </div>
           </div>
+
         </div>
       )}
 
@@ -1071,14 +1121,14 @@ export default function App() {
               </button>
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>저장 일자</label>
-              <input type="date" value={editingOrderModal.created_at} onChange={e => setEditingOrderModal({ ...editingOrderModal, created_at: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px', gap: '12px' }}>
+              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0 }}>저장 일자</label>
+              <input type="date" value={editingOrderModal.created_at} onChange={e => setEditingOrderModal({ ...editingOrderModal, created_at: e.target.value })} style={{ flex: 1, padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 / 배달 구분</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px', gap: '12px' }}>
+              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0, paddingTop: '6px' }}>주문 / 배달 구분</label>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
                 {orderTypes.map(ot => (
                   <button
                     key={ot.id}
@@ -1100,9 +1150,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>결제 구분</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '12px' }}>
+              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0 }}>결제 구분</label>
+              <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
                 {['카드', '현금'].map(pt => (
                   <button
                     key={pt}
