@@ -840,7 +840,7 @@ export default function App() {
 
           {/* 메뉴 선택 패널 */}
           <div style={{ flex: 1, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: '100%' }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
               {storeTags.map(tag => (
                 <button
                   key={tag.id}
@@ -862,7 +862,7 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
               {categories.map(cat => (
                 <button
                   key={cat.id}
@@ -893,76 +893,17 @@ export default function App() {
               }).map(m => {
                 const isExpanded = expandedMenuOptions?.menuId === m.id;
                 return (
-                  <React.Fragment key={m.id}>
-                    <button onClick={() => handleMenuCardClick(m)} style={{ padding: '12px', background: isExpanded ? '#eff6ff' : '#f8fafc', border: isExpanded ? '2px solid #2563eb' : '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box', position: 'relative' }}>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '9px', background: '#dbeafe', color: '#1e40af', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
-                        <span style={{ fontSize: '9px', background: '#e0e7ff', color: '#3730a3', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span>
-                        {(m.options || []).length > 0 && (
-                          <span style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>옵션</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px', wordBreak: 'break-all' }}>{m.name}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
-                    </button>
-
-                    {isExpanded && (
-                      <div style={{ gridColumn: '1 / -1', background: '#eff6ff', border: '2px solid #2563eb', borderRadius: '10px', padding: '16px', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{m.name}</span>
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>기본가 {m.price.toLocaleString()}원 · 옵션을 선택해주세요</span>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '14px' }}>
-                          {(m.options || []).map(group => (
-                            <div key={group.id}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{group.name}</span>
-                                {group.is_required && <span style={{ fontSize: '10px', color: '#fff', background: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>필수</span>}
-                                {group.allow_multiple && <span style={{ fontSize: '10px', color: '#3730a3', background: '#e0e7ff', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>중복선택가능</span>}
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                {(group.options || []).map(opt => {
-                                  const sel = expandedMenuOptions.selections[group.id];
-                                  const isSelected = group.allow_multiple ? (Array.isArray(sel) && sel.includes(opt.id)) : sel === opt.id;
-                                  return (
-                                    <button
-                                      key={opt.id}
-                                      onClick={() => toggleOptionSelection(group, opt.id)}
-                                      style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '9px 12px',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        textAlign: 'left',
-                                        border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                                        background: isSelected ? '#dbeafe' : '#fff'
-                                      }}
-                                    >
-                                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: isSelected ? '#1d4ed8' : '#334155' }}>{opt.name}</span>
-                                      <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
-                                        {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                                {(group.options || []).length === 0 && (
-                                  <div style={{ fontSize: '11px', color: '#94a3b8', padding: '6px' }}>등록된 옵션이 없습니다.</div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button onClick={() => setExpandedMenuOptions(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
-                          <button onClick={confirmOptionSelection} style={{ flex: 2, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>장바구니 담기</button>
-                        </div>
-                      </div>
-                    )}
-                  </React.Fragment>
+                  <button key={m.id} onClick={() => handleMenuCardClick(m)} style={{ padding: '12px', background: isExpanded ? '#eff6ff' : '#f8fafc', border: isExpanded ? '2px solid #2563eb' : '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box', position: 'relative' }}>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '9px', background: '#dbeafe', color: '#1e40af', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
+                      <span style={{ fontSize: '9px', background: '#e0e7ff', color: '#3730a3', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span>
+                      {(m.options || []).length > 0 && (
+                        <span style={{ fontSize: '9px', background: '#fef3c7', color: '#92400e', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold' }}>옵션</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px', wordBreak: 'break-all' }}>{m.name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
+                  </button>
                 );
               })}
             </div>
@@ -1190,7 +1131,7 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', overflowX: 'auto', paddingBottom: '6px', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', paddingBottom: '6px', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
             <button
               onClick={() => setSelectedMgmtCategory('전체')}
               style={{
@@ -1331,6 +1272,72 @@ export default function App() {
 
         </div>
       )}
+
+      {/* 부가옵션 선택 팝업 (POS 메뉴 선택 화면에서 옵션이 있는 메뉴를 클릭했을 때) */}
+      {expandedMenuOptions && (() => {
+        const menu = menus.find(m => m.id === expandedMenuOptions.menuId);
+        if (!menu) return null;
+        const groups = menu.options || [];
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
+            <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
+                <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{menu.name}</span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>기본가 {menu.price.toLocaleString()}원</span>
+              </div>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0, marginBottom: '16px' }}>옵션을 선택해주세요.</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '18px' }}>
+                {groups.map(group => (
+                  <div key={group.id}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{group.name}</span>
+                      {group.is_required && <span style={{ fontSize: '10px', color: '#fff', background: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>필수</span>}
+                      {group.allow_multiple && <span style={{ fontSize: '10px', color: '#3730a3', background: '#e0e7ff', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>중복선택가능</span>}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {(group.options || []).map(opt => {
+                        const sel = expandedMenuOptions.selections[group.id];
+                        const isSelected = group.allow_multiple ? (Array.isArray(sel) && sel.includes(opt.id)) : sel === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            onClick={() => toggleOptionSelection(group, opt.id)}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '9px 12px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                              background: isSelected ? '#dbeafe' : '#fff'
+                            }}
+                          >
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: isSelected ? '#1d4ed8' : '#334155' }}>{opt.name}</span>
+                            <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
+                              {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {(group.options || []).length === 0 && (
+                        <div style={{ fontSize: '11px', color: '#94a3b8', padding: '6px' }}>등록된 옵션이 없습니다.</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setExpandedMenuOptions(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+                <button onClick={confirmOptionSelection} style={{ flex: 2, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>장바구니 담기</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 카테고리 관리 팝업 */}
       {isCategoryModalOpen && (
