@@ -606,7 +606,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 메뉴 선택 패널 (넓어진 화면에서 가로 공간을 꽉 채우도록 확장) */}
+          {/* 메뉴 선택 패널 */}
           <div style={{ flex: 1, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: '100%' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
               {storeTags.map(tag => (
@@ -674,7 +674,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. 일매출 정산 (헤더-필터 좌우 구성 및 명칭 '가게구분'으로 변경 완료) */}
+      {/* 2. 일매출 정산 */}
       {activeTab === 'sales' && (
         <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
           <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
@@ -709,10 +709,8 @@ export default function App() {
           <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
             <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
             
-            {/* 좌우 배치형 필터 구성 영역 및 '가게구분' 명칭 변경 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box' }}>
               
-              {/* 가게 구분 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>가게구분</span>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -723,7 +721,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 배달 구분 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>배달 구분</span>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -734,7 +731,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 결제 수단 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '75px', flexShrink: 0 }}>결제 수단</span>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -1245,7 +1241,7 @@ export default function App() {
                 {modalCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: '12px' }, { width: '100%' }}>
+            <div style={{ marginBottom: '12px', width: '100%' }}>
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
               <input value={editingMenuModal.name} onChange={e => setEditingMenuModal({ ...editingMenuModal, name: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
