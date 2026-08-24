@@ -670,7 +670,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. 일매출 정산 (일자 목록 드롭다운 적용) */}
+      {/* 2. 일매출 정산 */}
       {activeTab === 'sales' && (
         <div style={{ display: 'flex', gap: '12px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
           <div style={{ width: '100%', background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
@@ -705,9 +705,12 @@ export default function App() {
           <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
             <h2 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
             
+            {/* 반응형 필터 영역: PC에서는 기존대로 너비 유연 대응, 모바일에서는 라벨을 왼쪽에 배치 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px', background: '#f8fafc', padding: '10px', borderRadius: '8px', boxSizing: 'border-box' }}>
-              <div>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>가게 구분:</span>
+              
+              {/* 가게 구분 */}
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: isMobile ? 'center' : 'flex-start', gap: isMobile ? '8px' : '4px' }}>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', width: isMobile ? '70px' : 'auto', flexShrink: 0 }}>가게 구분:</span>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                   <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155' }}>전체</button>
                   {storeTags.map(st => (
@@ -715,8 +718,10 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              <div>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>배달 구분:</span>
+
+              {/* 배달 구분 */}
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: isMobile ? 'center' : 'flex-start', gap: isMobile ? '8px' : '4px' }}>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', width: isMobile ? '70px' : 'auto', flexShrink: 0 }}>배달 구분:</span>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                   <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155' }}>전체</button>
                   {orderTypes.map(ot => (
@@ -724,14 +729,17 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              <div>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>결제 수단:</span>
+
+              {/* 결제 수단 */}
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: isMobile ? 'center' : 'flex-start', gap: isMobile ? '8px' : '4px' }}>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', width: isMobile ? '70px' : 'auto', flexShrink: 0 }}>결제 수단:</span>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                   {['전체', '카드', '현금'].map(pt => (
                     <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155' }}>{pt}</button>
                   ))}
                 </div>
               </div>
+
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
