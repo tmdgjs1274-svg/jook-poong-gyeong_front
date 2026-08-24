@@ -4,12 +4,11 @@ import axios from 'axios';
 export default function App() {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-  // 반응형(모바일) 감지 state 추가
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
-    handleResize(); // 초기 렌더링 시 체크
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -27,14 +26,11 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   
-  // POS 화면: 기본 선택을 첫 번째 가게와 해당 가게의 첫 카테고리로 설정
   const [selectedPosStore, setSelectedPosStore] = useState('');
   const [selectedPosCategory, setSelectedPosCategory] = useState(''); 
-  const [selectedMgmtStore, setSelectedMgmtStore] = useState(''); // 초기값을 비워두어 첫 가게나 동적 제어
-  // 메뉴 관리 탭의 카테고리별 필터 state 추가
+  const [selectedMgmtStore, setSelectedMgmtStore] = useState(''); 
   const [selectedMgmtCategory, setSelectedMgmtCategory] = useState('전체');
 
-  // 일매출 정산 state
   const [dateList, setDateList] = useState([]);
   const [selectedDate, setSelectedDate] = useState(getTodayStr());
   const [dailyOrders, setDailyOrders] = useState([]);
@@ -42,10 +38,8 @@ export default function App() {
   const [filterOrderType, setFilterOrderType] = useState('전체');
   const [filterPaymentType, setFilterPaymentType] = useState('전체');
   
-  // 주문 수정 모달 state
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
-  // 메뉴/카테고리 관리 state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newMenu, setNewMenu] = useState({ name: '', price: '', store_tag: '', category_id: '' });
   const [modalCategories, setModalCategories] = useState([]); 
@@ -53,16 +47,13 @@ export default function App() {
   const [newStoreInput, setNewStoreInput] = useState('');
   const [newOrderTypeInput, setNewOrderTypeInput] = useState('');
 
-  // 카테고리 팝업 관리 state 추가
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
-  // 할인 입력 모달 state (POS용)
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [discountName, setDiscountName] = useState('금액 할인');
   const [discountAmount, setDiscountAmount] = useState('');
 
-  // 할인 입력 모달 state (주문 수정용)
   const [isEditDiscountModalOpen, setIsEditDiscountModalOpen] = useState(false);
   const [editDiscountName, setEditDiscountName] = useState('금액 할인');
   const [editDiscountAmount, setEditDiscountAmount] = useState('');
@@ -86,7 +77,6 @@ export default function App() {
     }
   }, [activeTab, selectedDate]);
 
-  // 관리 탭의 가게 선택이 바뀔 때 해당 가게의 카테고리를 불러오도록 연동 및 메뉴 관리 카테고리 필터 초기화
   useEffect(() => {
     if (selectedMgmtStore) {
       fetchCategories(selectedMgmtStore);
@@ -94,7 +84,6 @@ export default function App() {
     }
   }, [selectedMgmtStore]);
 
-  // POS 화면에서 가게가 변경될 때 해당 가게의 카테고리 목록을 불러오고 기본 카테고리 자동 설정 ('카테고리 없음' 필터 제거 반영)
   useEffect(() => {
     if (selectedPosStore) {
       axios.get(`${API_BASE_URL}/categories?store_tag=${encodeURIComponent(selectedPosStore)}`)
@@ -111,7 +100,6 @@ export default function App() {
     }
   }, [selectedPosStore]);
 
-  // 새 메뉴 등록 모달에서 가게가 바뀔 때 카테고리 조회
   useEffect(() => {
     if (newMenu.store_tag) {
       fetchModalCategories(newMenu.store_tag);
@@ -120,7 +108,6 @@ export default function App() {
     }
   }, [newMenu.store_tag]);
 
-  // 메뉴 수정 모달에서 가게가 바뀔 때 카테고리 조회
   useEffect(() => {
     if (editingMenuModal?.store_tag) {
       fetchModalCategories(editingMenuModal.store_tag);
@@ -476,7 +463,8 @@ export default function App() {
   });
 
   return (
-    <div style={{ width: '100%', minWidth: isMobile ? '100%' : '1200px', margin: '0 auto', padding: '16px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
+    /* 최상단 컨테이너 너비를 100% 및 모바일 퍼스트로 완벽히 고정 */
+    <div style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden', margin: '0 auto', padding: '8px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
       
       {toastMessage && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', background: '#1e293b', color: '#fff', padding: '12px 20px', borderRadius: '8px', zIndex: 9999, fontWeight: 'bold' }}>
@@ -485,34 +473,34 @@ export default function App() {
       )}
 
       {/* 상단 네비게이션 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '16px', backgroundColor: '#fff', padding: '12px 20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flexDirection: isMobile ? 'column' : 'row', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'center' : 'flex-start' }}>
-          <button onClick={() => setActiveTab('pos')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b' }}>주문 입력</button>
-          <button onClick={() => setActiveTab('sales')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b' }}>일매출 정산</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', backgroundColor: '#fff', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flexDirection: isMobile ? 'column' : 'row', gap: '8px', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', width: '100%', justifyContent: 'center' }}>
+          <button onClick={() => setActiveTab('pos')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b', fontSize: '13px' }}>주문 입력</button>
+          <button onClick={() => setActiveTab('sales')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b', fontSize: '13px' }}>일매출 정산</button>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'center' : 'flex-end' }}>
-          <button onClick={() => setActiveTab('menuMgmt')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'menuMgmt' ? '#10b981' : '#f1f5f9', color: activeTab === 'menuMgmt' ? '#fff' : '#64748b' }}>⚙️ 메뉴 관리</button>
-          <button onClick={() => setActiveTab('categoryMgmt')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'categoryMgmt' ? '#8b5cf6' : '#f1f5f9', color: activeTab === 'categoryMgmt' ? '#fff' : '#64748b' }}>🏷️ 가게/배달 관리</button>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', width: '100%', justifyContent: 'center' }}>
+          <button onClick={() => setActiveTab('menuMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'menuMgmt' ? '#10b981' : '#f1f5f9', color: activeTab === 'menuMgmt' ? '#fff' : '#64748b', fontSize: '13px' }}>⚙️ 메뉴 관리</button>
+          <button onClick={() => setActiveTab('categoryMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'categoryMgmt' ? '#8b5cf6' : '#f1f5f9', color: activeTab === 'categoryMgmt' ? '#fff' : '#64748b', fontSize: '13px' }}>🏷️ 가게/배달</button>
         </div>
       </div>
 
       {/* 1. POS 영역 */}
       {activeTab === 'pos' && (
-        <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row' }}>
-          <div style={{ width: isMobile ? '100%' : '420px', flexShrink: 0, background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px' }}>주문 내역</h2>
-              <button onClick={() => setIsDiscountModalOpen(true)} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', gap: '12px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
+          <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
+              <button onClick={() => setIsDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                 🏷️ 금액 할인 추가
               </button>
             </div>
             
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '10px' }}>
               <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>저장 일자</label>
               <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '10px' }}>
               <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 / 배달 구분</label>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {orderTypes.map(ot => (
@@ -524,11 +512,10 @@ export default function App() {
                       borderRadius: '16px',
                       border: 'none',
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       fontWeight: 'bold',
                       background: orderType === ot.id ? '#10b981' : '#f1f5f9',
-                      color: orderType === ot.id ? '#fff' : '#64748b',
-                      boxShadow: orderType === ot.id ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                      color: orderType === ot.id ? '#fff' : '#64748b'
                     }}
                   >
                     {ot.name}
@@ -537,7 +524,7 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
+            <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>결제 구분</label>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {['카드', '현금'].map(pt => (
@@ -549,7 +536,7 @@ export default function App() {
                       borderRadius: '16px',
                       border: 'none',
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       fontWeight: 'bold',
                       background: paymentType === pt ? '#10b981' : '#f1f5f9',
                       color: paymentType === pt ? '#fff' : '#64748b',
@@ -561,31 +548,31 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ flex: 1, minHeight: '180px', maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <div style={{ width: '100%', maxHeight: '220px', overflowY: 'auto', marginBottom: '12px', boxSizing: 'border-box' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '36px' }}>
-                    <th>메뉴 / 할인</th><th>수량</th><th style={{ textAlign: 'right' }}>금액</th><th style={{ textAlign: 'center', width: '50px' }}>삭제</th>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
+                    <th style={{ width: '40%' }}>메뉴 / 할인</th><th style={{ width: '25%' }}>수량</th><th style={{ width: '25%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {cart.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', height: '44px', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold' }}>{item.name}</td>
+                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', height: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
+                      <td style={{ fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</td>
                       <td>
                         {!item.isDiscount ? (
-                          <>
-                            <button onClick={() => updateQuantity(item.menu_id, -1, false)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>-</button>
-                            <span style={{ margin: '0 6px', fontWeight: 'bold' }}>{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.menu_id, 1, false)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>+</button>
-                          </>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                            <button onClick={() => updateQuantity(item.menu_id, -1, false)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>-</button>
+                            <span style={{ fontWeight: 'bold', fontSize: '12px', minWidth: '14px', textAlign: 'center' }}>{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.menu_id, 1, false)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>+</button>
+                          </div>
                         ) : (
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{(item.price * item.quantity).toLocaleString()}원</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
                       <td style={{ textAlign: 'center' }}>
-                        <button onClick={() => removeFromCart(item.menu_id, item.isDiscount)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>삭제</button>
+                        <button onClick={() => removeFromCart(item.menu_id, item.isDiscount)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>X</button>
                       </td>
                     </tr>
                   ))}
@@ -593,22 +580,22 @@ export default function App() {
               </table>
             </div>
 
-            <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <span style={{ fontSize: '16px', fontWeight: 'bold' }}>총 결제 금액</span>
-                <span style={{ fontSize: '22px', fontWeight: 'bold', color: '#2563eb' }}>{cart.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}원</span>
+            <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 'bold' }}>총 결제 금액</span>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>{cart.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}원</span>
               </div>
               <button 
                 onClick={handleOrder} 
                 disabled={isSubmitting}
                 style={{ 
                   width: '100%', 
-                  padding: '14px', 
+                  padding: '12px', 
                   background: isSubmitting ? '#94a3b8' : '#10b981', 
                   color: '#fff', 
                   border: 'none', 
                   borderRadius: '8px', 
-                  fontSize: '16px', 
+                  fontSize: '15px', 
                   fontWeight: 'bold', 
                   cursor: isSubmitting ? 'not-allowed' : 'pointer' 
                 }}
@@ -618,20 +605,21 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ flex: 1, background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+          <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
               {storeTags.map(tag => (
                 <button 
                   key={tag.id} 
                   onClick={() => setSelectedPosStore(tag.name)} 
                   style={{ 
-                    padding: '8px 16px', 
-                    borderRadius: '20px', 
+                    padding: '6px 12px', 
+                    borderRadius: '16px', 
                     border: 'none', 
                     cursor: 'pointer', 
                     background: selectedPosStore === tag.name ? '#0f172a' : '#f1f5f9', 
                     color: selectedPosStore === tag.name ? '#fff' : '#64748b', 
                     fontWeight: 'bold',
+                    fontSize: '12px',
                     flexShrink: 0
                   }}
                 >
@@ -640,20 +628,20 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
               {categories.map(cat => (
                 <button 
                   key={cat.id} 
                   onClick={() => setSelectedPosCategory(cat.name)} 
                   style={{ 
-                    padding: '6px 14px', 
-                    borderRadius: '16px', 
+                    padding: '5px 10px', 
+                    borderRadius: '14px', 
                     border: 'none', 
                     cursor: 'pointer', 
                     background: selectedPosCategory === cat.name ? '#2563eb' : '#f1f5f9', 
                     color: selectedPosCategory === cat.name ? '#fff' : '#64748b', 
                     fontWeight: 'bold', 
-                    fontSize: '13px',
+                    fontSize: '12px',
                     flexShrink: 0
                   }}
                 >
@@ -662,20 +650,20 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
               {menus.filter(m => {
                 const storeMatch = !selectedPosStore || m.store_tag === selectedPosStore;
                 const menuCatName = m.categories?.name || '카테고리 없음';
                 const catMatch = selectedPosCategory === '' || menuCatName === selectedPosCategory;
                 return storeMatch && catMatch;
               }).map(m => (
-                <button key={m.id} onClick={() => addToCart(m)} style={{ padding: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', textAlign: 'left' }}>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '10px', background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
-                    <span style={{ fontSize: '10px', background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>{m.categories?.name || '카테고리 없음'}</span>
+                <button key={m.id} onClick={() => addToCart(m)} style={{ padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '9px', background: '#dbeafe', color: '#1e40af', padding: '1px 4px', borderRadius: '3px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
+                    <span style={{ fontSize: '9px', background: '#e0e7ff', color: '#3730a3', padding: '1px 4px', borderRadius: '3px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span>
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '4px' }}>{m.name}</div>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '2px', wordBreak: 'break-all' }}>{m.name}</div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>{m.price.toLocaleString()}원</div>
                 </button>
               ))}
             </div>
@@ -685,74 +673,79 @@ export default function App() {
 
       {/* 2. 일매출 정산 */}
       {activeTab === 'sales' && (
-        <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row' }}>
-          <div style={{ width: isMobile ? '100%' : '220px', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>일자 목록</h3>
-            <div style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: '6px', overflowX: isMobile ? 'auto' : 'visible' }}>
+        <div style={{ display: 'flex', gap: '12px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
+          <div style={{ width: '100%', background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>일자 목록</h3>
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', whiteSpace: 'nowrap' }}>
               {dateList.map(date => (
-                <button key={date} onClick={() => setSelectedDate(date)} style={{ padding: '12px', background: selectedDate === date ? '#2563eb' : '#f8fafc', color: selectedDate === date ? '#fff' : '#334155', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>
+                <button key={date} onClick={() => setSelectedDate(date)} style={{ padding: '8px 12px', background: selectedDate === date ? '#2563eb' : '#f8fafc', color: selectedDate === date ? '#fff' : '#334155', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0, fontSize: '12px' }}>
                   {date}
                 </button>
               ))}
             </div>
           </div>
 
-          <div style={{ flex: 1, background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '20px' }}>{selectedDate} 매출 상세 정보</h2>
+          <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+            <h2 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
             
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', background: '#f8fafc', padding: '14px', borderRadius: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px', background: '#f8fafc', padding: '10px', borderRadius: '8px', boxSizing: 'border-box' }}>
               <div>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold', marginRight: '8px' }}>가게 구분:</span>
-                <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155' }}>전체</button>
-                {storeTags.map(st => (
-                  <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155' }}>{st.name}</button>
-                ))}
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>가게 구분:</span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155' }}>전체</button>
+                  {storeTags.map(st => (
+                    <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155' }}>{st.name}</button>
+                  ))}
+                </div>
               </div>
               <div>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold', marginRight: '8px' }}>배달 구분:</span>
-                <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155' }}>전체</button>
-                {orderTypes.map(ot => (
-                  <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155' }}>{ot.name}</button>
-                ))}
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>배달 구분:</span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155' }}>전체</button>
+                  {orderTypes.map(ot => (
+                    <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155' }}>{ot.name}</button>
+                  ))}
+                </div>
               </div>
               <div>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold', marginRight: '8px' }}>결제 수단:</span>
-                {['전체', '카드', '현금'].map(pt => (
-                  <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 10px', margin: '2px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155' }}>{pt}</button>
-                ))}
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>결제 수단:</span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {['전체', '카드', '현금'].map(pt => (
+                    <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155' }}>{pt}</button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexDirection: isMobile ? 'column' : 'row' }}>
-              <div style={{ flex: 1, background: '#eff6ff', padding: '16px', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
-                <div style={{ fontSize: '13px', color: '#1e40af' }}>총 주문 건수</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e3a8a' }}>{filteredDailyOrders.length} 건</div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+              <div style={{ flex: 1, background: '#eff6ff', padding: '10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                <div style={{ fontSize: '11px', color: '#1e40af' }}>총 주문 건수</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e3a8a' }}>{filteredDailyOrders.length} 건</div>
               </div>
-              <div style={{ flex: 1, background: '#ecfdf5', padding: '16px', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
-                <div style={{ fontSize: '13px', color: '#065f46' }}>총 매출 금액</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#064e3b' }}>{filteredDailyOrders.reduce((s, o) => s + o.total_amount, 0).toLocaleString()} 원</div>
+              <div style={{ flex: 1, background: '#ecfdf5', padding: '10px', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
+                <div style={{ fontSize: '11px', color: '#065f46' }}>총 매출 금액</div>
+                <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#064e3b' }}>{filteredDailyOrders.reduce((s, o) => s + o.total_amount, 0).toLocaleString()} 원</div>
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '700px' }}>
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '550px' }}>
                 <thead>
-                  <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
-                    <th style={{ width: '40px' }}></th>
-                    <th style={{ width: '130px' }}>주문일시</th>
-                    <th style={{ width: '110px' }}>결제 수단</th>
-                    <th style={{ width: '120px' }}>배달 구분</th>
-                    {/* 주문 상품 상세 항목: 가로 스크롤 방지를 위해 줄바꿈 허용 설정 적용 */}
-                    <th style={{ textAlign: 'left', paddingLeft: '12px', minWidth: '220px' }}>주문 상품 상세</th>
-                    <th style={{ width: '100px' }}>총 금액</th>
-                    <th style={{ width: '110px' }}>관리</th>
+                  <tr style={{ background: '#f8fafc', height: '36px', color: '#64748b' }}>
+                    <th style={{ width: '30px' }}></th>
+                    <th style={{ width: '100px' }}>주문일시</th>
+                    <th style={{ width: '65px' }}>결제</th>
+                    <th style={{ width: '75px' }}>구분</th>
+                    <th style={{ textAlign: 'left', paddingLeft: '8px', minWidth: '160px' }}>상세 내역</th>
+                    <th style={{ width: '80px' }}>금액</th>
+                    <th style={{ width: '85px' }}>관리</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredDailyOrders.map((order, idx) => {
                     const dateObj = new Date(order.created_at);
                     const formattedTime = !isNaN(dateObj.getTime()) 
-                      ? `${dateObj.getFullYear()}.${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
+                      ? `${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
                       : order.created_at;
 
                     return (
@@ -762,25 +755,24 @@ export default function App() {
                         onDragStart={() => setDraggedOrderIdx(idx)}
                         onDragOver={e => e.preventDefault()}
                         onDrop={() => handleGenericDrop(dailyOrders, setDailyOrders, draggedOrderIdx, idx)}
-                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', minHeight: '52px', background: '#fff', cursor: 'grab' }}
+                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '44px', background: '#fff' }}
                       >
-                        <td style={{ color: '#94a3b8', fontSize: '16px' }}>☰</td>
-                        <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
+                        <td style={{ color: '#94a3b8' }}>☰</td>
+                        <td style={{ fontSize: '11px', color: '#64748b' }}>{formattedTime}</td>
                         <td>
-                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 'bold' }}>
                             {order.payment_type || '카드'}
                           </span>
                         </td>
                         <td>
-                          <span style={{ background: '#f1f5f9', color: '#334155', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                          <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 'bold' }}>
                             {order.order_types?.name || '매장'}
                           </span>
                         </td>
-                        {/* 주문 상품 상세 리스트가 길어질 때 줄바꿈(두 줄 이상) 처리되도록 설정 */}
-                        <td style={{ textAlign: 'left', paddingLeft: '12px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', fontWeight: '500', whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: '1.4' }}>
-                          {order.order_items?.map(i => `${i.menus?.name || '할인/기타'}(${i.quantity}개)`).join(', ')}
+                        <td style={{ textAlign: 'left', paddingLeft: '8px', paddingRight: '8px', paddingTop: '6px', paddingBottom: '6px', fontSize: '11px', whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: '1.3' }}>
+                          {order.order_items?.map(i => `${i.menus?.name || '할인'}(${i.quantity})`).join(', ')}
                         </td>
-                        <td style={{ fontWeight: 'bold' }}>{order.total_amount.toLocaleString()}원</td>
+                        <td style={{ fontWeight: 'bold', fontSize: '11px' }}>{order.total_amount.toLocaleString()}원</td>
                         <td>
                           <button onClick={() => setEditingOrderModal({
                             ...order,
@@ -792,8 +784,8 @@ export default function App() {
                               quantity: item.quantity,
                               isDiscount: item.menu_id === null || item.price < 0
                             }))
-                          })} style={{ marginRight: '4px', padding: '6px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
-                          <button onClick={() => handleDeleteOrder(order.id)} style={{ padding: '6px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>삭제</button>
+                          })} style={{ marginRight: '2px', padding: '4px 6px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px' }}>수정</button>
+                          <button onClick={() => handleDeleteOrder(order.id)} style={{ padding: '4px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px' }}>삭제</button>
                         </td>
                       </tr>
                     );
@@ -807,37 +799,37 @@ export default function App() {
 
       {/* 3. 메뉴 관리 탭 */}
       {activeTab === 'menuMgmt' && (
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: isMobile ? '100%' : 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '20px', flexDirection: isMobile ? 'column' : 'row', gap: '12px' }}>
-            <h2 style={{ margin: 0, fontSize: '18px' }}>메뉴 세팅 및 관리</h2>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button onClick={() => setIsCategoryModalOpen(true)} style={{ padding: '10px 18px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                🏷️ 카테고 관리
+        <div style={{ background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: '100%' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexDirection: 'column', gap: '8px' }}>
+            <h2 style={{ margin: 0, fontSize: '16px' }}>메뉴 세팅 및 관리</h2>
+            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+              <button onClick={() => setIsCategoryModalOpen(true)} style={{ flex: 1, padding: '8px 0', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                🏷️ 카테고리
               </button>
-              <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: selectedMgmtStore || '', category_id: '' }); setIsCreateModalOpen(true); }} style={{ padding: '10px 18px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                + 새 메뉴 등록
+              <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: selectedMgmtStore || '', category_id: '' }); setIsCreateModalOpen(true); }} style={{ flex: 1, padding: '8px 0', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                + 메뉴 등록
               </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
             {storeTags.map(st => (
-              <button key={st.id} onClick={() => setSelectedMgmtStore(st.name)} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === st.name ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === st.name ? '#fff' : '#64748b', fontWeight: 'bold' }}>{st.name}</button>
+              <button key={st.id} onClick={() => setSelectedMgmtStore(st.name)} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === st.name ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === st.name ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px' }}>{st.name}</button>
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px', whiteSpace: 'nowrap' }}>
             <button 
               onClick={() => setSelectedMgmtCategory('전체')} 
               style={{ 
-                padding: '6px 12px', 
-                borderRadius: '16px', 
+                padding: '5px 10px', 
+                borderRadius: '14px', 
                 border: 'none', 
                 cursor: 'pointer', 
                 background: selectedMgmtCategory === '전체' ? '#0f172a' : '#f1f5f9', 
                 color: selectedMgmtCategory === '전체' ? '#fff' : '#64748b', 
                 fontWeight: 'bold', 
-                fontSize: '13px',
+                fontSize: '12px',
                 flexShrink: 0
               }}
             >
@@ -848,14 +840,14 @@ export default function App() {
                 key={cat.id} 
                 onClick={() => setSelectedMgmtCategory(cat.name)} 
                 style={{ 
-                  padding: '6px 12px', 
-                  borderRadius: '16px', 
+                  padding: '5px 10px', 
+                  borderRadius: '14px', 
                   border: 'none', 
                   cursor: 'pointer', 
                   background: selectedMgmtCategory === cat.name ? '#0f172a' : '#f1f5f9', 
                   color: selectedMgmtCategory === cat.name ? '#fff' : '#64748b', 
                   fontWeight: 'bold', 
-                  fontSize: '13px',
+                  fontSize: '12px',
                   flexShrink: 0
                 }}
               >
@@ -864,12 +856,12 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '600px' }}>
+          <div style={{ overflowX: 'auto', width: '100%' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '450px' }}>
               <thead>
-                <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
-                  <th style={{ width: '40px' }}></th>
-                  <th>가게 구분</th><th>카테고리</th><th>메뉴명</th><th>가격</th><th>관리</th>
+                <tr style={{ background: '#f8fafc', height: '36px', color: '#64748b' }}>
+                  <th style={{ width: '30px' }}></th>
+                  <th>가게</th><th>카테고리</th><th>메뉴명</th><th>가격</th><th style={{ width: '80px' }}>관리</th>
                 </tr>
               </thead>
               <tbody>
@@ -885,20 +877,20 @@ export default function App() {
                     onDragStart={() => setDraggedMenuIdx(idx)}
                     onDragOver={e => e.preventDefault()}
                     onDrop={() => handleGenericDrop(menus, setMenus, draggedMenuIdx, idx)}
-                    style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', cursor: 'grab' }}
+                    style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '44px' }}
                   >
-                    <td style={{ color: '#94a3b8', fontSize: '16px' }}>☰</td>
-                    <td><span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span></td>
-                    <td><span style={{ background: '#e0e7ff', color: '#3730a3', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{m.categories?.name || '카테고리 없음'}</span></td>
-                    <td style={{ fontWeight: 'bold' }}>{m.name}</td>
-                    <td>{m.price.toLocaleString()}원</td>
+                    <td style={{ color: '#94a3b8' }}>☰</td>
+                    <td><span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span></td>
+                    <td><span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span></td>
+                    <td style={{ fontWeight: 'bold', fontSize: '11px' }}>{m.name}</td>
+                    <td style={{ fontSize: '11px' }}>{m.price.toLocaleString()}원</td>
                     <td>
                       <button onClick={() => {
                         const initialCatId = m.categories?.id || m.category_id || '';
                         setEditingMenuModal({ ...m, category_id: initialCatId });
                         if (m.store_tag) fetchModalCategories(m.store_tag);
-                      }} style={{ marginRight: '6px', padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>수정</button>
-                      <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>삭제</button>
+                      }} style={{ marginRight: '2px', padding: '4px 6px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px' }}>수정</button>
+                      <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '4px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px' }}>삭제</button>
                     </td>
                   </tr>
                 ))}
@@ -910,14 +902,14 @@ export default function App() {
 
       {/* 4. 가게/배달 관리 탭 */}
       {activeTab === 'categoryMgmt' && (
-        <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row' }}>
-          <div style={{ flex: 1, minWidth: isMobile ? '100%' : '300px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, fontSize: '16px' }}>가게 구분 관리</h3>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <input placeholder="예: 3호점, 강남점" value={newStoreInput} onChange={e => setNewStoreInput(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <button onClick={handleAddStoreTag} style={{ padding: '10px 16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
+        <div style={{ display: 'flex', gap: '12px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
+          <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, fontSize: '15px' }}>가게 구분 관리</h3>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+              <input placeholder="예: 3호점, 강남점" value={newStoreInput} onChange={e => setNewStoreInput(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }} />
+              <button onClick={handleAddStoreTag} style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>추가</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {storeTags.map((st, idx) => (
                 <div 
                   key={st.id} 
@@ -925,22 +917,22 @@ export default function App() {
                   onDragStart={() => setDraggedStoreIdx(idx)} 
                   onDragOver={e => e.preventDefault()} 
                   onDrop={() => handleStoreTagDrop(draggedStoreIdx, idx)} 
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'grab' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold' }}>{st.name}</span></div>
-                  <button onClick={() => handleDeleteStoreTag(st.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '12px' }}>{st.name}</span></div>
+                  <button onClick={() => handleDeleteStoreTag(st.id)} style={{ padding: '3px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>삭제</button>
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ flex: 1, minWidth: isMobile ? '100%' : '300px', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, fontSize: '16px' }}>배달 구분 관리</h3>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <input placeholder="예: 배달의민족, 쿠팡이츠" value={newOrderTypeInput} onChange={e => setNewOrderTypeInput(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <button onClick={handleAddOrderType} style={{ padding: '10px 16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
+          <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, fontSize: '15px' }}>배달 구분 관리</h3>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+              <input placeholder="예: 배달의민족, 쿠팡이츠" value={newOrderTypeInput} onChange={e => setNewOrderTypeInput(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }} />
+              <button onClick={handleAddOrderType} style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>추가</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {orderTypes.map((ot, idx) => (
                 <div 
                   key={ot.id} 
@@ -948,10 +940,10 @@ export default function App() {
                   onDragStart={() => setDraggedOrderTypeIdx(idx)} 
                   onDragOver={e => e.preventDefault()} 
                   onDrop={() => handleOrderTypeDrop(draggedOrderTypeIdx, idx)} 
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'grab' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold' }}>{ot.name}</span></div>
-                  <button onClick={() => handleDeleteOrderType(ot.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '12px' }}>{ot.name}</span></div>
+                  <button onClick={() => handleDeleteOrderType(ot.id)} style={{ padding: '3px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>삭제</button>
                 </div>
               ))}
             </div>
@@ -961,18 +953,18 @@ export default function App() {
 
       {/* 카테고리 관리 팝업 */}
       {isCategoryModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: isMobile ? '100%' : '400px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '8px' }}>🏷️ 메뉴 카테고리 관리</h3>
-            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '12px' }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', width: '100%', maxWidth: '360px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>🏷️ 메뉴 카테고리 관리</h3>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
               현재 선택된 가게: <strong style={{ color: '#2563eb' }}>{selectedMgmtStore}</strong>
             </p>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <input placeholder="예: 메인요리, 사이드, 음료" value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <button onClick={handleAddCategory} style={{ padding: '10px 16px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+              <input placeholder="예: 메인요리, 사이드, 음료" value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }} />
+              <button onClick={handleAddCategory} style={{ padding: '8px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>추가</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
               {categories.map((cat, idx) => (
                 <div 
                   key={cat.id} 
@@ -980,34 +972,34 @@ export default function App() {
                   onDragStart={() => setDraggedCategoryIdx(idx)} 
                   onDragOver={e => e.preventDefault()} 
                   onDrop={() => handleCategoryDrop(draggedCategoryIdx, idx)} 
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'grab' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold' }}>{cat.name}</span></div>
-                  <button onClick={() => handleDeleteCategory(cat.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '12px' }}>{cat.name}</span></div>
+                  <button onClick={() => handleDeleteCategory(cat.id)} style={{ padding: '3px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>삭제</button>
                 </div>
               ))}
             </div>
-            <button onClick={() => setIsCategoryModalOpen(false)} style={{ width: '100%', padding: '12px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>닫기</button>
+            <button onClick={() => setIsCategoryModalOpen(false)} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>닫기</button>
           </div>
         </div>
       )}
 
       {/* POS용 할인 모달 */}
       {isDiscountModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: isMobile ? '100%' : '320px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>🏷️ 금액 할인 추가</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 명칭</label>
-              <input type="text" value={discountName} onChange={e => setDiscountName(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '12px' }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', width: '100%', maxWidth: '300px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>🏷️ 금액 할인 추가</h3>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 명칭</label>
+              <input type="text" value={discountName} onChange={e => setDiscountName(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 금액 (원)</label>
-              <input type="number" placeholder="예: 2000" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 금액 (원)</label>
+              <input type="number" placeholder="예: 2000" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsDiscountModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={addDiscountToCart} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>추가</button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setIsDiscountModalOpen(false)} style={{ flex: 1, padding: '8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+              <button onClick={addDiscountToCart} style={{ flex: 1, padding: '8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>추가</button>
             </div>
           </div>
         </div>
@@ -1015,19 +1007,19 @@ export default function App() {
 
       {/* 주문 수정용 할인 모달 */}
       {isEditDiscountModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: isMobile ? '100%' : '320px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>🏷️ 주문 수정 - 금액 할인 추가</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 명칭</label>
-              <input type="text" value={editDiscountName} onChange={e => setEditDiscountName(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, boxSizing: 'border-box', padding: '12px' }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', width: '100%', maxWidth: '300px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>🏷️ 주문 수정 - 금액 할인 추가</h3>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 명칭</label>
+              <input type="text" value={editDiscountName} onChange={e => setEditDiscountName(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 금액 (원)</label>
-              <input type="number" placeholder="예: 2000" value={editDiscountAmount} onChange={e => setEditDiscountAmount(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 금액 (원)</label>
+              <input type="number" placeholder="예: 2000" value={editDiscountAmount} onChange={e => setEditDiscountAmount(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsEditDiscountModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setIsEditDiscountModalOpen(false)} style={{ flex: 1, padding: '8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
               <button onClick={() => {
                 const amt = Number(editDiscountAmount);
                 if (!amt || amt <= 0) return alert('유효한 할인 금액을 입력해주세요.');
@@ -1037,7 +1029,7 @@ export default function App() {
                 }));
                 setEditDiscountAmount('');
                 setIsEditDiscountModalOpen(false);
-              }} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>추가</button>
+              }} style={{ flex: 1, padding: '8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>추가</button>
             </div>
           </div>
         </div>
@@ -1045,33 +1037,33 @@ export default function App() {
 
       {/* 주문 상세 수정 모달 */}
       {editingOrderModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: isMobile ? '100%' : '550px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px' }}>✏️ 주문 상세 수정</h3>
-              <button onClick={() => setIsEditDiscountModalOpen(true)} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '12px' }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>✏️ 주문 상세 수정</h3>
+              <button onClick={() => setIsEditDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                 🏷️ 금액 할인 추가
               </button>
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>저장 일자</label>
-              <input type="date" value={editingOrderModal.created_at} onChange={e => setEditingOrderModal({ ...editingOrderModal, created_at: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>저장 일자</label>
+              <input type="date" value={editingOrderModal.created_at} onChange={e => setEditingOrderModal({ ...editingOrderModal, created_at: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 / 배달 구분</label>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>주문 / 배달 구분</label>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {orderTypes.map(ot => (
                   <button
                     key={ot.id}
                     onClick={() => setEditingOrderModal({ ...editingOrderModal, order_type_id: ot.id })}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: '16px',
+                      padding: '6px 10px',
+                      borderRadius: '14px',
                       border: 'none',
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: '11px',
                       fontWeight: 'bold',
                       background: editingOrderModal.order_type_id === ot.id ? '#10b981' : '#f1f5f9',
                       color: editingOrderModal.order_type_id === ot.id ? '#fff' : '#64748b'
@@ -1083,19 +1075,19 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>결제 구분</label>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>결제 구분</label>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {['카드', '현금'].map(pt => (
                   <button
                     key={pt}
                     onClick={() => setEditingOrderModal({ ...editingOrderModal, payment_type: pt })}
                     style={{
-                      padding: '6px 16px',
-                      borderRadius: '16px',
+                      padding: '6px 14px',
+                      borderRadius: '14px',
                       border: 'none',
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: '11px',
                       fontWeight: 'bold',
                       background: editingOrderModal.payment_type === pt ? '#10b981' : '#f1f5f9',
                       color: editingOrderModal.payment_type === pt ? '#fff' : '#64748b'
@@ -1107,47 +1099,47 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px', overflowX: 'auto' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 상품 목록</label>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '400px' }}>
+            <div style={{ marginBottom: '14px', overflowX: 'auto' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>주문 상품 목록</label>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '320px' }}>
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '36px' }}>
-                    <th>상품명 / 할인</th><th>수량</th><th style={{ textAlign: 'right' }}>금액</th><th style={{ textAlign: 'center', width: '50px' }}>삭제</th>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
+                    <th style={{ width: '40%' }}>상품명 / 할인</th><th style={{ width: '25%' }}>수량</th><th style={{ width: '25%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {editingOrderModal.order_items.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', height: '44px', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold' }}>{item.name}</td>
+                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', height: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
+                      <td style={{ fontWeight: 'bold', fontSize: '11px' }}>{item.name}</td>
                       <td>
                         {!item.isDiscount ? (
-                          <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                             <button onClick={() => {
                               setEditingOrderModal(prev => ({
                                 ...prev,
                                 order_items: prev.order_items.map((it, i) => i === idx && it.quantity > 1 ? { ...it, quantity: it.quantity - 1 } : it)
                               }));
-                            }} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>-</button>
-                            <span style={{ margin: '0 6px', fontWeight: 'bold' }}>{item.quantity}</span>
+                            }} style={{ padding: '2px 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer' }}>-</button>
+                            <span style={{ fontWeight: 'bold', fontSize: '11px', minWidth: '12px', textAlign: 'center' }}>{item.quantity}</span>
                             <button onClick={() => {
                               setEditingOrderModal(prev => ({
                                 ...prev,
                                 order_items: prev.order_items.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 1 } : it)
                               }));
-                            }} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>+</button>
-                          </>
+                            }} style={{ padding: '2px 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer' }}>+</button>
+                          </div>
                         ) : (
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{(item.price * item.quantity).toLocaleString()}원</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '11px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
                       <td style={{ textAlign: 'center' }}>
                         <button onClick={() => {
                           setEditingOrderModal(prev => ({
                             ...prev,
                             order_items: prev.order_items.filter((_, i) => i !== idx)
                           }));
-                        }} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>삭제</button>
+                        }} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>X</button>
                       </td>
                     </tr>
                   ))}
@@ -1155,16 +1147,16 @@ export default function App() {
               </table>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderTop: '2px solid #f1f5f9', paddingTop: '12px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 'bold' }}>수정된 총 금액</span>
-              <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#2563eb' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px', borderTop: '2px solid #f1f5f9', paddingTop: '10px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 'bold' }}>수정된 총 금액</span>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#2563eb' }}>
                 {editingOrderModal.order_items.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}원
               </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setEditingOrderModal(null)} style={{ flex: 1, padding: '12px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={handleUpdateOrderSubmit} style={{ flex: 1, padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>저장하기</button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setEditingOrderModal(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+              <button onClick={handleUpdateOrderSubmit} style={{ flex: 1, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>저장하기</button>
             </div>
           </div>
         </div>
@@ -1172,34 +1164,34 @@ export default function App() {
 
       {/* 새 메뉴 등록 모달 */}
       {isCreateModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: isMobile ? '100%' : '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>새 메뉴 등록</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
-              <select value={newMenu.store_tag} onChange={e => setNewMenu({ ...newMenu, store_tag: e.target.value, category_id: '' })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '12px' }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', width: '100%', maxWidth: '320px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>새 메뉴 등록</h3>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
+              <select value={newMenu.store_tag} onChange={e => setNewMenu({ ...newMenu, store_tag: e.target.value, category_id: '' })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }}>
                 <option value="">선택해주세요</option>
                 {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
-              <select value={newMenu.category_id} onChange={e => setNewMenu({ ...newMenu, category_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
+              <select value={newMenu.category_id} onChange={e => setNewMenu({ ...newMenu, category_id: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }}>
                 <option value="">카테고리 없음</option>
                 {modalCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
-              <input placeholder="예: 소고기죽" value={newMenu.name} onChange={e => setNewMenu({ ...newMenu, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
+              <input placeholder="예: 소고기죽" value={newMenu.name} onChange={e => setNewMenu({ ...newMenu, name: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
-              <input type="number" placeholder="예: 10000" value={newMenu.price} onChange={e => setNewMenu({ ...newMenu, price: Number(e.target.value) })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
+              <input type="number" placeholder="예: 10000" value={newMenu.price} onChange={e => setNewMenu({ ...newMenu, price: Number(e.target.value) })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsCreateModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={handleCreateMenu} style={{ flex: 1, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>등록</button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setIsCreateModalOpen(false)} style={{ flex: 1, padding: '8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+              <button onClick={handleCreateMenu} style={{ flex: 1, padding: '8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>등록</button>
             </div>
           </div>
         </div>
@@ -1207,34 +1199,34 @@ export default function App() {
 
       {/* 메뉴 수정 모달 */}
       {editingMenuModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: isMobile ? '100%' : '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>메뉴 수정</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
-              <select value={editingMenuModal.store_tag} onChange={e => setEditingMenuModal({ ...editingMenuModal, store_tag: e.target.value, category_id: '' })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '12px' }}>
+          <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', width: '100%', maxWidth: '320px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>메뉴 수정</h3>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가게 구분</label>
+              <select value={editingMenuModal.store_tag} onChange={e => setEditingMenuModal({ ...editingMenuModal, store_tag: e.target.value, category_id: '' })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }}>
                 <option value="">선택해주세요</option>
                 {storeTags.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
-              <select value={editingMenuModal.category_id} onChange={e => setEditingMenuModal({ ...editingMenuModal, category_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>카테고리</label>
+              <select value={editingMenuModal.category_id} onChange={e => setEditingMenuModal({ ...editingMenuModal, category_id: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }}>
                 <option value="">카테고리 없음</option>
                 {modalCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
-              <input value={editingMenuModal.name} onChange={e => setEditingMenuModal({ ...editingMenuModal, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>메뉴명</label>
+              <input value={editingMenuModal.name} onChange={e => setEditingMenuModal({ ...editingMenuModal, name: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
-              <input type="number" value={editingMenuModal.price} onChange={e => setEditingMenuModal({ ...editingMenuModal, price: Number(e.target.value) })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>가격</label>
+              <input type="number" value={editingMenuModal.price} onChange={e => setEditingMenuModal({ ...editingMenuModal, price: Number(e.target.value) })} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setEditingMenuModal(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-              <button onClick={handleUpdateMenuModal} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setEditingMenuModal(null)} style={{ flex: 1, padding: '8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+              <button onClick={handleUpdateMenuModal} style={{ flex: 1, padding: '8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>수정</button>
             </div>
           </div>
         </div>
