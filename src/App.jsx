@@ -2,7 +2,31 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function App() {
-  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  // new Date().toISOString()은 UTC 기준이라 밤 12시~오전 9시(한국 시간) 사이에는 날짜가 하루 전으로
+  // 밀리는 문제가 있었다. 브라우저의 로컬 시간 기준으로 "YYYY-MM-DD"를 만들도록 수정.
+  const getTodayStr = () => {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  // 주문 저장/수정 시 사용할 timestamp 문자열을 만든다.
+  // - dateStr: "YYYY-MM-DD" (사용자가 고른 저장 일자)
+  // - refTimestamp: 시/분/초를 그대로 가져올 기준 시각(기존 주문의 원래 시각). 없으면 현재 시각을 사용한다.
+  // 타임존 오프셋을 명시적으로 포함시켜서, DB 세션 타임존과 무관하게 항상 같은 실제 시각으로 저장되게 한다.
+  // (기존에는 날짜만 "YYYY-MM-DD" 형태로 보냈는데, 이 경우 자정(00:00 UTC)으로 해석되어
+  //  한국시간 기준 오전 9시로 고정되어 보이는 문제가 있었다.)
+  const buildCreatedAtISO = (dateStr, refTimestamp) => {
+    const ref = refTimestamp ? new Date(refTimestamp) : new Date();
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const local = new Date(y, (m || 1) - 1, d, ref.getHours(), ref.getMinutes(), ref.getSeconds());
+    const pad = n => String(n).padStart(2, '0');
+    const offsetMin = -local.getTimezoneOffset();
+    const sign = offsetMin >= 0 ? '+' : '-';
+    const offH = pad(Math.floor(Math.abs(offsetMin) / 60));
+    const offM = pad(Math.abs(offsetMin) % 60);
+    return `${dateStr}T${pad(local.getHours())}:${pad(local.getMinutes())}:${pad(local.getSeconds())}${sign}${offH}:${offM}`;
+  };
 
   const [isMobile, setIsMobile] = useState(false);
 
@@ -64,6 +88,18 @@ export default function App() {
   const [draggedStoreIdx, setDraggedStoreIdx] = useState(null);
   const [draggedOrderTypeIdx, setDraggedOrderTypeIdx] = useState(null);
   const [draggedCategoryIdx, setDraggedCategoryIdx] = useState(null);
+
+  // 드래그로 순서를 바꾸는 모든 목록에서 공통으로 쓰는 "드롭 위치 표시" 상태
+  // { listId, idx, edge: 'before' | 'after' } - 어느 항목의 위/아래로 들어갈지를 나타낸다.
+  const [dragIndicator, setDragIndicator] = useState(null);
+
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+
+  const [editingOptionGroupId, setEditingOptionGroupId] = useState(null);
+  const [editingOptionGroupName, setEditingOptionGroupName] = useState('');
+  const [editingOptionItemId, setEditingOptionItemId] = useState(null);
+  const [editingOptionItemDraft, setEditingOptionItemDraft] = useState({ name: '', price: '' });
 
   // ===== 부가옵션(옵션 그룹 / 옵션) 관련 상태 =====
   // 카테고리와 마찬가지로 "가게(selectedMgmtStore)" 하위에 공통으로 귀속되는 리소스다.
@@ -273,7 +309,9 @@ export default function App() {
           ? current.filter(id => id !== optionId)
           : [...current, optionId];
       } else {
-        selections[group.id] = optionId;
+        // 단일 선택 그룹: 필수가 아닌 경우, 이미 선택된 옵션을 다시 누르면 선택을 해제할 수 있게 한다.
+        // (선택지가 1개뿐인 옵션 그룹에서 체크 후 되돌릴 방법이 없던 문제 수정)
+        selections[group.id] = (!group.is_required && selections[group.id] === optionId) ? '' : optionId;
       }
       return { ...prev, selections };
     });
@@ -389,7 +427,7 @@ export default function App() {
         price: item.price,
         options: item.options || []
       })),
-      created_at: orderDate
+      created_at: buildCreatedAtISO(orderDate)
     };
 
     try {
@@ -436,12 +474,40 @@ export default function App() {
     }
   };
 
+  // ===== 드래그 앤 드롭 공통 유틸 =====
+  // 마우스가 항목의 위쪽 절반에 있으면 그 항목 "앞"에, 아래쪽 절반에 있으면 "뒤"에 놓일 것임을 표시해준다.
+  const handleDragOverItem = (listId, idx) => (e) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const edge = (e.clientY - rect.top) > rect.height / 2 ? 'after' : 'before';
+    setDragIndicator(prev => (prev && prev.listId === listId && prev.idx === idx && prev.edge === edge) ? prev : { listId, idx, edge });
+  };
+
+  const clearDragIndicator = () => setDragIndicator(null);
+
+  // 드롭될 위치에 파란 선을 그려주는 스타일 (레이아웃에 영향을 주지 않도록 box-shadow로 표현)
+  const getDropLineStyle = (listId, idx) => {
+    if (!dragIndicator || dragIndicator.listId !== listId || dragIndicator.idx !== idx) return {};
+    return dragIndicator.edge === 'after'
+      ? { boxShadow: 'inset 0 -3px 0 0 #2563eb' }
+      : { boxShadow: 'inset 0 3px 0 0 #2563eb' };
+  };
+
+  // 드래그해서 놓은 위치(항목의 앞/뒤)를 그대로 반영해 배열 순서를 바꾼다.
+  const reorderList = (list, dragIdx, dropIdx, edge) => {
+    const newList = [...list];
+    const [moved] = newList.splice(dragIdx, 1);
+    let insertIdx = edge === 'after' ? dropIdx + 1 : dropIdx;
+    if (dragIdx < insertIdx) insertIdx -= 1; // 앞쪽 항목을 제거하면서 한 칸씩 당겨진 것을 보정
+    newList.splice(insertIdx, 0, moved);
+    return newList;
+  };
+
   const handleCategoryDrop = async (dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
     if (dragIdx === null || dragIdx === dropIdx) return;
-    const newList = [...categories];
-    const targetItem = newList[dragIdx];
-    newList.splice(dragIdx, 1);
-    newList.splice(dropIdx, 0, targetItem);
+    const newList = reorderList(categories, dragIdx, dropIdx, edge);
     setCategories(newList);
     setDraggedCategoryIdx(null);
 
@@ -454,12 +520,34 @@ export default function App() {
     }
   };
 
+  const startEditCategory = (cat) => {
+    setEditingCategoryId(cat.id);
+    setEditingCategoryName(cat.name);
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
+  };
+
+  const handleRenameCategory = async () => {
+    if (!editingCategoryName.trim()) return alert('카테고리명을 입력해주세요.');
+    try {
+      await axios.put(`${API_BASE_URL}/categories/${editingCategoryId}`, { name: editingCategoryName.trim() });
+      showToast('카테고리명이 수정되었습니다.');
+      cancelEditCategory();
+      fetchCategories(selectedMgmtStore);
+      fetchInitialData();
+    } catch (err) {
+      alert(`카테고리명 수정 실패: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
   const handleStoreTagDrop = async (dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
     if (dragIdx === null || dragIdx === dropIdx) return;
-    const newList = [...storeTags];
-    const targetItem = newList[dragIdx];
-    newList.splice(dragIdx, 1);
-    newList.splice(dropIdx, 0, targetItem);
+    const newList = reorderList(storeTags, dragIdx, dropIdx, edge);
     setStoreTags(newList);
     setDraggedStoreIdx(null);
 
@@ -473,11 +561,10 @@ export default function App() {
   };
 
   const handleOrderTypeDrop = async (dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
     if (dragIdx === null || dragIdx === dropIdx) return;
-    const newList = [...orderTypes];
-    const targetItem = newList[dragIdx];
-    newList.splice(dragIdx, 1);
-    newList.splice(dropIdx, 0, targetItem);
+    const newList = reorderList(orderTypes, dragIdx, dropIdx, edge);
     setOrderTypes(newList);
     setDraggedOrderTypeIdx(null);
 
@@ -582,7 +669,9 @@ export default function App() {
         price: item.price,
         options: item.options || []
       })),
-      created_at: editingOrderModal.created_at.split('T')[0]
+      // 저장 일자(날짜)만 바뀌었을 때도 원래 주문의 시/분/초는 그대로 유지한다.
+      // (예전에는 날짜만 보내서 수정할 때마다 시각이 자정(한국시간 오전 9시)으로 초기화되던 문제가 있었다.)
+      created_at: buildCreatedAtISO(editingOrderModal.created_at, editingOrderModal.created_at_original)
     };
 
     try {
@@ -634,6 +723,53 @@ export default function App() {
     }
   };
 
+  const startEditOptionGroup = (group) => {
+    setEditingOptionGroupId(group.id);
+    setEditingOptionGroupName(group.name);
+  };
+
+  const cancelEditOptionGroup = () => {
+    setEditingOptionGroupId(null);
+    setEditingOptionGroupName('');
+  };
+
+  const handleRenameOptionGroup = async () => {
+    if (!editingOptionGroupName.trim()) return alert('옵션 그룹명을 입력해주세요.');
+    try {
+      await axios.put(`${API_BASE_URL}/option-groups/${editingOptionGroupId}`, { name: editingOptionGroupName.trim() });
+      showToast('옵션 그룹명이 수정되었습니다.');
+      cancelEditOptionGroup();
+      refreshOptionGroupsEverywhere();
+    } catch (err) {
+      alert(`옵션 그룹명 수정 실패: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
+  const startEditOptionItem = (opt) => {
+    setEditingOptionItemId(opt.id);
+    setEditingOptionItemDraft({ name: opt.name, price: opt.extra_price || '' });
+  };
+
+  const cancelEditOptionItem = () => {
+    setEditingOptionItemId(null);
+    setEditingOptionItemDraft({ name: '', price: '' });
+  };
+
+  const handleRenameOptionItem = async () => {
+    if (!editingOptionItemDraft.name.trim()) return alert('옵션명을 입력해주세요.');
+    try {
+      await axios.put(`${API_BASE_URL}/option-items/${editingOptionItemId}`, {
+        name: editingOptionItemDraft.name.trim(),
+        extra_price: editingOptionItemDraft.price === '' ? 0 : Number(editingOptionItemDraft.price)
+      });
+      showToast('옵션이 수정되었습니다.');
+      cancelEditOptionItem();
+      refreshOptionGroupsEverywhere();
+    } catch (err) {
+      alert(`옵션 수정 실패: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
   const handleAddOption = async (groupId) => {
     const draft = newOptionDraft[groupId] || { name: '', price: '' };
     if (!draft.name) return alert('옵션명을 입력해주세요.');
@@ -662,12 +798,10 @@ export default function App() {
   };
 
   const handleGenericDrop = (list, setList, dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
     if (dragIdx === null || dragIdx === dropIdx) return;
-    const newList = [...list];
-    const targetItem = newList[dragIdx];
-    newList.splice(dragIdx, 1);
-    newList.splice(dropIdx, 0, targetItem);
-    setList(newList);
+    setList(reorderList(list, dragIdx, dropIdx, edge));
   };
 
   // 주문 상세 내역에 표시할 "메뉴명 (선택옵션1, 선택옵션2)" 형태의 텍스트를 만든다.
@@ -997,8 +1131,9 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {filteredDailyOrders.map((order) => {
                   const dateObj = new Date(order.created_at);
+                  // 정산 화면은 이미 선택된 하루(일자) 기준으로 보고 있으므로, 날짜는 빼고 시간만 표시한다.
                   const formattedTime = !isNaN(dateObj.getTime())
-                    ? `${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
+                    ? `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
                     : order.created_at;
 
                   return (
@@ -1019,6 +1154,7 @@ export default function App() {
                           <button onClick={() => setEditingOrderModal({
                             ...order,
                             created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
+                            created_at_original: order.created_at,
                             order_items: order.order_items.map(item => ({
                               menu_id: item.menu_id,
                               name: item.menus?.name || '할인/기타',
@@ -1041,7 +1177,7 @@ export default function App() {
                   <thead>
                     <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
                       <th style={{ width: '30px' }}></th>
-                      <th style={{ width: '110px' }}>주문일시</th>
+                      <th style={{ width: '60px' }}>시간</th>
                       <th style={{ width: '75px' }}>결제</th>
                       <th style={{ width: '85px' }}>구분</th>
                       <th style={{ textAlign: 'left', paddingLeft: '10px', minWidth: '180px' }}>상세 내역</th>
@@ -1052,8 +1188,9 @@ export default function App() {
                   <tbody>
                     {filteredDailyOrders.map((order, idx) => {
                       const dateObj = new Date(order.created_at);
+                      // 정산 화면은 이미 선택된 하루(일자) 기준으로 보고 있으므로, 날짜는 빼고 시간만 표시한다.
                       const formattedTime = !isNaN(dateObj.getTime())
-                        ? `${String(dateObj.getMonth() + 1).padStart(2, '0')}.${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
+                        ? `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
                         : order.created_at;
 
                       return (
@@ -1061,9 +1198,11 @@ export default function App() {
                           key={order.id}
                           draggable
                           onDragStart={() => setDraggedOrderIdx(idx)}
-                          onDragOver={e => e.preventDefault()}
+                          onDragOver={handleDragOverItem('dailyOrders', idx)}
+                          onDragLeave={clearDragIndicator}
+                          onDragEnd={clearDragIndicator}
                           onDrop={() => handleGenericDrop(dailyOrders, setDailyOrders, draggedOrderIdx, idx)}
-                          style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', background: '#fff' }}
+                          style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', background: '#fff', ...getDropLineStyle('dailyOrders', idx) }}
                         >
                           <td style={{ color: '#94a3b8' }}>☰</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
@@ -1085,6 +1224,7 @@ export default function App() {
                             <button onClick={() => setEditingOrderModal({
                               ...order,
                               created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
+                            created_at_original: order.created_at,
                               order_items: order.order_items.map(item => ({
                                 menu_id: item.menu_id,
                                 name: item.menus?.name || '할인/기타',
@@ -1188,9 +1328,11 @@ export default function App() {
                     key={m.id}
                     draggable
                     onDragStart={() => setDraggedMenuIdx(idx)}
-                    onDragOver={e => e.preventDefault()}
+                    onDragOver={handleDragOverItem('menus', idx)}
+                    onDragLeave={clearDragIndicator}
+                    onDragEnd={clearDragIndicator}
                     onDrop={() => handleGenericDrop(menus, setMenus, draggedMenuIdx, idx)}
-                    style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px' }}
+                    style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', ...getDropLineStyle('menus', idx) }}
                   >
                     <td style={{ color: '#94a3b8' }}>☰</td>
                     <td><span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span></td>
@@ -1236,9 +1378,11 @@ export default function App() {
                   key={st.id}
                   draggable
                   onDragStart={() => setDraggedStoreIdx(idx)}
-                  onDragOver={e => e.preventDefault()}
+                  onDragOver={handleDragOverItem('storeTags', idx)}
+                  onDragLeave={clearDragIndicator}
+                  onDragEnd={clearDragIndicator}
                   onDrop={() => handleStoreTagDrop(draggedStoreIdx, idx)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', ...getDropLineStyle('storeTags', idx) }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '13px' }}>{st.name}</span></div>
                   <button onClick={() => handleDeleteStoreTag(st.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
@@ -1259,9 +1403,11 @@ export default function App() {
                   key={ot.id}
                   draggable
                   onDragStart={() => setDraggedOrderTypeIdx(idx)}
-                  onDragOver={e => e.preventDefault()}
+                  onDragOver={handleDragOverItem('orderTypes', idx)}
+                  onDragLeave={clearDragIndicator}
+                  onDragEnd={clearDragIndicator}
                   onDrop={() => handleOrderTypeDrop(draggedOrderTypeIdx, idx)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', ...getDropLineStyle('orderTypes', idx) }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '13px' }}>{ot.name}</span></div>
                   <button onClick={() => handleDeleteOrderType(ot.id)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>삭제</button>
@@ -1352,22 +1498,46 @@ export default function App() {
               <input placeholder="예: 메인요리, 사이드, 음료" value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)} style={{ flex: 1, padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }} />
               <button onClick={handleAddCategory} style={{ padding: '9px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>추가</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            {/* 카테고리 수가 많아져도 입력창/닫기 버튼은 항상 보이도록, 목록만 정해진 높이 안에서 스크롤되게 한다 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', maxHeight: '320px', overflowY: 'auto', paddingRight: '2px' }}>
               {categories.map((cat, idx) => (
                 <div
                   key={cat.id}
-                  draggable
+                  draggable={editingCategoryId !== cat.id}
                   onDragStart={() => setDraggedCategoryIdx(idx)}
-                  onDragOver={e => e.preventDefault()}
+                  onDragOver={handleDragOverItem('categories', idx)}
+                  onDragLeave={clearDragIndicator}
+                  onDragEnd={clearDragIndicator}
                   onDrop={() => handleCategoryDrop(draggedCategoryIdx, idx)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '9px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '9px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', ...getDropLineStyle('categories', idx) }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '12px' }}>{cat.name}</span></div>
-                  <button onClick={() => handleDeleteCategory(cat.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>삭제</button>
+                  {editingCategoryId === cat.id ? (
+                    <>
+                      <input
+                        autoFocus
+                        value={editingCategoryName}
+                        onChange={e => setEditingCategoryName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRenameCategory(); if (e.key === 'Escape') cancelEditCategory(); }}
+                        style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px', marginRight: '8px' }}
+                      />
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <button onClick={handleRenameCategory} style={{ padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>저장</button>
+                        <button onClick={cancelEditCategory} style={{ padding: '4px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>취소</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontWeight: 'bold', fontSize: '12px' }}>{cat.name}</span></div>
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <button onClick={() => startEditCategory(cat)} style={{ padding: '4px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>수정</button>
+                        <button onClick={() => handleDeleteCategory(cat.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>삭제</button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
-            <button onClick={() => setIsCategoryModalOpen(false)} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>닫기</button>
+            <button onClick={() => { setIsCategoryModalOpen(false); cancelEditCategory(); }} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>닫기</button>
           </div>
         </div>
       )}
@@ -1388,53 +1558,103 @@ export default function App() {
               </div>
             )}
 
-            {optionGroups.map(group => (
-              <div key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <div>
-                    <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{group.name}</span>
-                    <span style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: group.is_required ? '#fee2e2' : '#e0e7ff', color: group.is_required ? '#b91c1c' : '#3730a3', fontWeight: 'bold' }}>
-                      {group.is_required ? '필수' : '선택'}{group.allow_multiple ? ' · 중복가능' : ''}
-                    </span>
+            {/* 옵션 그룹 수가 많아져도 아래 "새 옵션 그룹 추가" 영역과 닫기 버튼은 항상 보이도록, 목록만 정해진 높이 안에서 스크롤되게 한다 */}
+            <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '2px' }}>
+              {optionGroups.map(group => (
+                <div key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px' }}>
+                    {editingOptionGroupId === group.id ? (
+                      <>
+                        <input
+                          autoFocus
+                          value={editingOptionGroupName}
+                          onChange={e => setEditingOptionGroupName(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionGroup(); if (e.key === 'Escape') cancelEditOptionGroup(); }}
+                          style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+                        />
+                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                          <button onClick={handleRenameOptionGroup} style={{ padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>저장</button>
+                          <button onClick={cancelEditOptionGroup} style={{ padding: '4px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>취소</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{group.name}</span>
+                          <span style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: group.is_required ? '#fee2e2' : '#e0e7ff', color: group.is_required ? '#b91c1c' : '#3730a3', fontWeight: 'bold' }}>
+                            {group.is_required ? '필수' : '선택'}{group.allow_multiple ? ' · 중복가능' : ''}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                          <button onClick={() => startEditOptionGroup(group)} style={{ padding: '4px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>수정</button>
+                          <button onClick={() => handleDeleteOptionGroup(group.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>그룹삭제</button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <button onClick={() => handleDeleteOptionGroup(group.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>그룹삭제</button>
-                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
-                  {(group.option_items || []).map(opt => (
-                    <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
-                          {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
-                        </span>
-                        <button onClick={() => handleDeleteOption(opt.id)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>X</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                    {(group.option_items || []).map(opt => (
+                      <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px', gap: '8px' }}>
+                        {editingOptionItemId === opt.id ? (
+                          <>
+                            <input
+                              autoFocus
+                              value={editingOptionItemDraft.name}
+                              onChange={e => setEditingOptionItemDraft(prev => ({ ...prev, name: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionItem(); if (e.key === 'Escape') cancelEditOptionItem(); }}
+                              style={{ flex: 2, padding: '5px 7px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+                            />
+                            <input
+                              type="number"
+                              value={editingOptionItemDraft.price}
+                              onChange={e => setEditingOptionItemDraft(prev => ({ ...prev, price: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionItem(); if (e.key === 'Escape') cancelEditOptionItem(); }}
+                              style={{ flex: 1, padding: '5px 7px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+                            />
+                            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                              <button onClick={handleRenameOptionItem} style={{ padding: '3px 6px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>저장</button>
+                              <button onClick={cancelEditOptionItem} style={{ padding: '3px 6px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>취소</button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
+                                {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
+                              </span>
+                              <button onClick={() => startEditOptionItem(opt)} style={{ padding: '3px 6px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>수정</button>
+                              <button onClick={() => handleDeleteOption(opt.id)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>X</button>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                  {(group.option_items || []).length === 0 && (
-                    <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>옵션이 없습니다.</div>
-                  )}
-                </div>
+                    ))}
+                    {(group.option_items || []).length === 0 && (
+                      <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>옵션이 없습니다.</div>
+                    )}
+                  </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <input
-                    placeholder="예: 곱빼기"
-                    value={(newOptionDraft[group.id] || {}).name || ''}
-                    onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), name: e.target.value } }))}
-                    style={{ flex: 2, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="추가금액"
-                    value={(newOptionDraft[group.id] || {}).price || ''}
-                    onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), price: e.target.value } }))}
-                    style={{ flex: 1, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                  />
-                  <button onClick={() => handleAddOption(group.id)} style={{ padding: '7px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>추가</button>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      placeholder="예: 곱빼기"
+                      value={(newOptionDraft[group.id] || {}).name || ''}
+                      onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), name: e.target.value } }))}
+                      style={{ flex: 2, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="추가금액"
+                      value={(newOptionDraft[group.id] || {}).price || ''}
+                      onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), price: e.target.value } }))}
+                      style={{ flex: 1, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                    />
+                    <button onClick={() => handleAddOption(group.id)} style={{ padding: '7px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>추가</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
             <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '12px', marginTop: '4px' }}>
               <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '8px' }}>+ 새 옵션 그룹 추가</p>
@@ -1457,7 +1677,7 @@ export default function App() {
               <button onClick={handleAddOptionGroup} style={{ width: '100%', padding: '10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>옵션 그룹 추가</button>
             </div>
 
-            <button onClick={() => setIsOptionGroupModalOpen(false)} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', marginTop: '14px' }}>닫기</button>
+            <button onClick={() => { setIsOptionGroupModalOpen(false); cancelEditOptionGroup(); cancelEditOptionItem(); }} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', marginTop: '14px' }}>닫기</button>
           </div>
         </div>
       )}
