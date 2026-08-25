@@ -1321,6 +1321,25 @@ export default function App() {
     </div>
   );
 
+  // 현재 그룹에 적용 중인 일괄 가격 조정이 정확히 얼마인지("+2,800원" / "-20%" 등) 저장된 값이 아니라
+  // 각 옵션의 extra_price(현재가)와 base_extra_price(원래가) 차이로부터 그대로 역산해서 보여준다.
+  // - 모든 옵션의 차액이 동일하면 정액 조정으로 보고 "+금액"/"-금액"으로 표시.
+  // - 차액이 옵션마다 다르면(원래 금액이 서로 달라서) 정률 조정으로 보고 "+n%"/"-n%"로 표시.
+  const getBulkAdjustLabel = (group) => {
+    const items = (group.option_items || []).filter(it => it.base_extra_price !== null && it.base_extra_price !== undefined);
+    if (items.length === 0) return '';
+    const deltas = items.map(it => (it.extra_price || 0) - (it.base_extra_price || 0));
+    const allSameDelta = deltas.every(d => d === deltas[0]);
+    if (allSameDelta) {
+      const d = deltas[0];
+      return `${d >= 0 ? '+' : ''}${d.toLocaleString()}원`;
+    }
+    const sample = items.find(it => (it.base_extra_price || 0) !== 0);
+    if (!sample) return '';
+    const pct = Math.round(((sample.extra_price - sample.base_extra_price) / sample.base_extra_price) * 100);
+    return `${pct >= 0 ? '+' : ''}${pct}%`;
+  };
+
   // 옵션 그룹 하나의 상세 내용(그룹명 헤더 + 옵션 목록 + 옵션 추가 폼).
   // 모바일에서는 그룹마다 이 내용을 카드로 쌓아 보여주고, PC에서는 좌측에서 고른 그룹 하나만 우측에 보여준다.
   const renderOptionGroupDetail = (group) => (
@@ -1375,7 +1394,7 @@ export default function App() {
             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4338ca', flexShrink: 0 }}>일괄 가격 조정</span>
             {isBulkAdjustActive ? (
               <>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#fff', background: '#f59e0b', padding: '4px 8px', borderRadius: '4px' }}>적용중</span>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#fff', background: '#f59e0b', padding: '4px 8px', borderRadius: '4px' }}>적용중 {getBulkAdjustLabel(group)}</span>
                 <button
                   onClick={() => handleReleaseBulkPrice(group)}
                   style={{ padding: '5px 10px', background: '#4338ca', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
@@ -1421,7 +1440,8 @@ export default function App() {
         );
       })()}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+      {/* 옵션이 많아져도 아래 "옵션 추가" 입력창이 항상 보이도록, 옵션 목록만 정해진 높이 안에서 스크롤되게 한다. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
         {(group.option_items || []).map((opt, optIdx) => (
           <div
             key={opt.id}
@@ -2832,4 +2852,3 @@ export default function App() {
     </div>
   );
 }
- 
