@@ -39,7 +39,11 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('pos');
   const [menus, setMenus] = useState([]);
-  const [categories, setCategories] = useState([]);
+  // [버그 수정] 이전에는 주문입력 탭과 메뉴관리 탭이 같은 categories 상태를 공유해서,
+  // 주문입력 탭에서 가게를 바꾸면 메뉴관리 탭에 표시되던 카테고리 목록까지 덮어써지는 문제가 있었다.
+  // 그래서 주문입력 탭(selectedPosStore 기준) 전용 posCategories를 따로 분리했다.
+  const [categories, setCategories] = useState([]); // 메뉴관리 탭(selectedMgmtStore 기준) + 카테고리 관리 모달용
+  const [posCategories, setPosCategories] = useState([]); // 주문입력 탭(selectedPosStore 기준) 전용
   const [cart, setCart] = useState([]);
   const [orderType, setOrderType] = useState(null);
   const [paymentType, setPaymentType] = useState('카드');
@@ -81,6 +85,10 @@ export default function App() {
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  // 카테고리 관리 모달은 메뉴관리 탭의 현재 탭(selectedMgmtStore)과 별개로, 모달 안에서 관리할 가게를 직접 고를 수 있게 한다.
+  // (기본값은 모달을 열 때의 selectedMgmtStore) - 모달 전용 목록(categoryModalList)을 따로 둬서 메뉴관리 탭 화면에 영향이 없게 한다.
+  const [categoryModalStore, setCategoryModalStore] = useState('');
+  const [categoryModalList, setCategoryModalList] = useState([]);
 
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [discountName, setDiscountName] = useState('금액 할인');
@@ -113,7 +121,9 @@ export default function App() {
   // ===== 부가옵션(옵션 그룹 / 옵션) 관련 상태 =====
   // 카테고리와 마찬가지로 "가게(selectedMgmtStore)" 하위에 공통으로 귀속되는 리소스다.
   const [isOptionGroupModalOpen, setIsOptionGroupModalOpen] = useState(false);
-  const [optionGroups, setOptionGroups] = useState([]); // 메뉴 관리 탭에서 선택된 가게(selectedMgmtStore)의 옵션 그룹 목록
+  const [optionGroups, setOptionGroups] = useState([]); // 옵션 관리 모달에서 관리 중인 가게(optionGroupModalStore)의 옵션 그룹 목록
+  // 옵션 관리 모달도 카테고리 관리 모달과 마찬가지로, 메뉴관리 탭의 현재 탭과 별개로 관리할 가게를 모달 안에서 고를 수 있게 한다.
+  const [optionGroupModalStore, setOptionGroupModalStore] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupRequired, setNewGroupRequired] = useState(false);
   const [newGroupMultiple, setNewGroupMultiple] = useState(false);
@@ -166,17 +176,26 @@ export default function App() {
   useEffect(() => {
     if (selectedMgmtStore) {
       fetchCategories(selectedMgmtStore);
-      fetchOptionGroups(selectedMgmtStore);
       setSelectedMgmtCategory('전체');
     }
   }, [selectedMgmtStore]);
+
+  // 카테고리 관리 / 옵션 관리 모달은 메뉴관리 탭의 현재 탭과 별개로 관리할 가게를 모달 안에서 고를 수 있으므로,
+  // (기본값은 모달을 열 때의 selectedMgmtStore) 각각 자신만의 store 상태 변화에 맞춰 목록을 새로 불러온다.
+  useEffect(() => {
+    if (categoryModalStore) fetchCategoryModalList(categoryModalStore);
+  }, [categoryModalStore]);
+
+  useEffect(() => {
+    if (optionGroupModalStore) fetchOptionGroups(optionGroupModalStore);
+  }, [optionGroupModalStore]);
 
   useEffect(() => {
     if (selectedPosStore) {
       axios.get(`${API_BASE_URL}/categories?store_tag=${encodeURIComponent(selectedPosStore)}`)
         .then(res => {
           const fetchedCats = res.data;
-          setCategories(fetchedCats);
+          setPosCategories(fetchedCats);
           if (fetchedCats.length > 0) {
             setSelectedPosCategory(fetchedCats[0].name);
           } else {
@@ -231,7 +250,20 @@ export default function App() {
     }
   };
 
-  // 메뉴 관리 탭의 "옵션 관리" 모달용 - 선택된 가게(selectedMgmtStore)의 옵션 그룹 목록
+  // 카테고리 관리 모달 전용 목록 조회 - 메뉴관리 탭의 categories 상태와는 별개로 관리해서,
+  // 모달 안에서 다른 가게를 선택해도 메뉴관리 탭 화면의 카테고리 칩에는 영향이 없게 한다.
+  const fetchCategoryModalList = async (storeTag) => {
+    if (!storeTag) return setCategoryModalList([]);
+    try {
+      const url = `${API_BASE_URL}/categories?store_tag=${encodeURIComponent(storeTag)}`;
+      const res = await axios.get(url);
+      setCategoryModalList(res.data);
+    } catch (err) {
+      console.error('카테고리 관리 모달 조회 실패:', err);
+    }
+  };
+
+  // "옵션 관리" 모달용 - 모달 안에서 고른 가게(optionGroupModalStore)의 옵션 그룹 목록
   const fetchOptionGroups = async (storeTag) => {
     if (!storeTag) return setOptionGroups([]);
     try {
@@ -492,19 +524,21 @@ export default function App() {
     }
   };
 
+  // 카테고리 관리 모달은 메뉴관리 탭의 현재 탭(selectedMgmtStore)이 아니라 모달 안에서 고른 가게(categoryModalStore) 기준으로 동작한다.
   const handleAddCategory = async () => {
     if (!newCategoryInput) return;
-    if (!selectedMgmtStore) {
+    if (!categoryModalStore) {
       return alert('카테고리를 추가할 특정 가게를 먼저 선택해주세요!');
     }
 
     try {
       await axios.post(`${API_BASE_URL}/categories`, {
         name: newCategoryInput,
-        store_tag: selectedMgmtStore
+        store_tag: categoryModalStore
       });
       setNewCategoryInput('');
       showToast('카테고리가 추가되었습니다.');
+      fetchCategoryModalList(categoryModalStore);
       fetchCategories(selectedMgmtStore);
       fetchInitialData();
     } catch (err) {
@@ -517,6 +551,7 @@ export default function App() {
     try {
       await axios.delete(`${API_BASE_URL}/categories/${id}`);
       showToast('카테고리가 삭제되었습니다.');
+      fetchCategoryModalList(categoryModalStore);
       fetchCategories(selectedMgmtStore);
       fetchInitialData();
     } catch (err) {
@@ -557,8 +592,8 @@ export default function App() {
     const edge = dragIndicator?.edge || 'before';
     clearDragIndicator();
     if (dragIdx === null || dragIdx === dropIdx) return;
-    const newList = reorderList(categories, dragIdx, dropIdx, edge);
-    setCategories(newList);
+    const newList = reorderList(categoryModalList, dragIdx, dropIdx, edge);
+    setCategoryModalList(newList);
     setDraggedCategoryIdx(null);
 
     try {
@@ -586,6 +621,7 @@ export default function App() {
       await axios.put(`${API_BASE_URL}/categories/${editingCategoryId}`, { name: editingCategoryName.trim() });
       showToast('카테고리명이 수정되었습니다.');
       cancelEditCategory();
+      fetchCategoryModalList(categoryModalStore);
       fetchCategories(selectedMgmtStore);
       fetchInitialData();
     } catch (err) {
@@ -735,20 +771,20 @@ export default function App() {
     }
   };
 
-  // ===== 부가옵션 관리 (메뉴 관리 탭 - "옵션 관리" 모달, 가게(selectedMgmtStore) 하위 공통 리소스) =====
+  // ===== 부가옵션 관리 (옵션 관리 모달, 모달 안에서 고른 가게(optionGroupModalStore) 하위 공통 리소스) =====
   const refreshOptionGroupsEverywhere = () => {
     // 옵션 관리 모달 목록 + 메뉴 목록(각 메뉴에 연결된 그룹 카운트/내용) 을 함께 최신화한다.
-    fetchOptionGroups(selectedMgmtStore);
+    fetchOptionGroups(optionGroupModalStore);
     fetchInitialData();
   };
 
   const handleAddOptionGroup = async () => {
     if (!newGroupName) return alert('옵션 그룹명을 입력해주세요.');
-    if (!selectedMgmtStore) return alert('옵션 그룹을 추가할 가게를 먼저 선택해주세요!');
+    if (!optionGroupModalStore) return alert('옵션 그룹을 추가할 가게를 먼저 선택해주세요!');
     try {
       await axios.post(`${API_BASE_URL}/option-groups`, {
         name: newGroupName,
-        store_tag: selectedMgmtStore,
+        store_tag: optionGroupModalStore,
         is_required: newGroupRequired,
         allow_multiple: newGroupMultiple
       });
@@ -950,6 +986,10 @@ export default function App() {
     { bg: '#ccfbf1', text: '#0f766e' }, // 틸
   ];
   const SALES_COLOR_UNSELECTED = { bg: '#e2e8f0', text: '#334155' };
+  // 매장/현금처럼 배지 색이 미선택 버튼의 회색과 똑같으면 필터에서 선택했는지 구분이 안 되므로,
+  // 필터 버튼의 "선택됨" 표시에만 좀 더 진한 회색을 대신 쓴다 (배지 자체의 색은 그대로 유지).
+  const SALES_SELECTED_NEUTRAL = { bg: '#cbd5e1', text: '#0f172a' };
+  const getFilterSelectedColor = (c) => (c.bg === SALES_COLOR_UNSELECTED.bg ? SALES_SELECTED_NEUTRAL : c);
   // 카테고리별로 팔레트 시작 위치를 다르게 오프셋을 주어, 가게구분 1번째 항목과 배달구분 1번째 항목이
   // 우연히 같은 색으로 겹치는 경우를 최대한 줄인다.
   const getPaletteColorAt = (offset, index) => salesPaletteColors[(offset + index) % salesPaletteColors.length];
@@ -957,14 +997,24 @@ export default function App() {
     const idx = storeTags.findIndex(s => s.name === name);
     return idx === -1 ? SALES_COLOR_UNSELECTED : getPaletteColorAt(0, idx);
   };
+  // 배달구분(구분)은 실제 서비스 브랜드 색상과 최대한 비슷하게 고정 색상을 사용한다.
+  // (배달의민족=블루, 쿠팡이츠=주황, 매장=그레이). 목록에 없는 새로운 배달구분이 추가되면 팔레트에서 색을 배정한다.
+  const orderTypeColorMap = {
+    '배달의민족': { bg: '#dbeafe', text: '#1d4ed8' },
+    '쿠팡이츠': { bg: '#ffedd5', text: '#c2410c' },
+    '매장': { bg: '#e2e8f0', text: '#334155' },
+  };
   const getOrderTypeColor = (name) => {
+    if (orderTypeColorMap[name]) return orderTypeColorMap[name];
     const idx = orderTypes.findIndex(o => o.name === name);
     return idx === -1 ? SALES_COLOR_UNSELECTED : getPaletteColorAt(4, idx);
   };
-  const getPaymentColor = (name) => {
-    const idx = ['카드', '현금'].indexOf(name);
-    return idx === -1 ? SALES_COLOR_UNSELECTED : getPaletteColorAt(8, idx);
+  // 결제수단도 고정 색상(카드=그린, 현금=그레이)을 사용한다.
+  const paymentColorMap = {
+    '카드': { bg: '#dcfce7', text: '#15803d' },
+    '현금': { bg: '#e2e8f0', text: '#334155' },
   };
+  const getPaymentColor = (name) => paymentColorMap[name] || SALES_COLOR_UNSELECTED;
   // 한 주문에 여러 가게의 메뉴가 섞여 있을 수 있으므로, 배지 색은 그 중 첫번째 가게구분 기준으로 정한다.
   const getOrderStoreColor = (order) => {
     const tags = [...new Set((order.order_items || []).map(i => i.menus?.store_tag).filter(Boolean))];
@@ -980,7 +1030,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
           {storeTags.map(st => {
-            const c = getStoreColor(st.name);
+            const c = getFilterSelectedColor(getStoreColor(st.name));
             const isSel = filterStore === st.name;
             return (
               <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{st.name}</button>
@@ -994,7 +1044,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
           {orderTypes.map(ot => {
-            const c = getOrderTypeColor(ot.name);
+            const c = getFilterSelectedColor(getOrderTypeColor(ot.name));
             const isSel = filterOrderType === ot.name;
             return (
               <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
@@ -1008,7 +1058,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           <button onClick={() => setFilterPaymentType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === '전체' ? '#2563eb' : '#e2e8f0', color: filterPaymentType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
           {['카드', '현금'].map(pt => {
-            const c = getPaymentColor(pt);
+            const c = getFilterSelectedColor(getPaymentColor(pt));
             const isSel = filterPaymentType === pt;
             return (
               <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{pt}</button>
@@ -1447,7 +1497,7 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
-              {categories.map(cat => (
+              {posCategories.map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedPosCategory(cat.name)}
@@ -1781,10 +1831,10 @@ export default function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexDirection: isMobile ? 'column' : 'row', gap: '10px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>메뉴 세팅 및 관리</h2>
             <div style={{ display: 'flex', gap: '8px', width: isMobile ? '100%' : 'auto' }}>
-              <button onClick={() => setIsCategoryModalOpen(true)} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+              <button onClick={() => { setCategoryModalStore(selectedMgmtStore); setIsCategoryModalOpen(true); }} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
                 🏷️ 카테고리 관리
               </button>
-              <button onClick={() => setIsOptionGroupModalOpen(true)} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+              <button onClick={() => { setOptionGroupModalStore(selectedMgmtStore); setIsOptionGroupModalOpen(true); }} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
                 🧩 옵션 관리
               </button>
               <button onClick={() => { setNewMenu({ name: '', price: '', store_tag: selectedMgmtStore || '', category_id: '', option_group_ids: [] }); setIsCreateModalOpen(true); }} style={{ flex: isMobile ? 1 : 'initial', padding: '8px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
@@ -2018,9 +2068,18 @@ export default function App() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '380px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
             <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px' }}>🏷️ 메뉴 카테고리 관리</h3>
-            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px' }}>
-              현재 선택된 가게: <strong style={{ color: '#2563eb' }}>{selectedMgmtStore}</strong>
-            </p>
+            {/* 메뉴관리 탭의 현재 탭과 별개로, 이 모달 안에서 관리할 가게를 바로 선택할 수 있다 (기본값은 모달을 열 때의 현재 탭) */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+              {storeTags.map(st => (
+                <button
+                  key={st.id}
+                  onClick={() => setCategoryModalStore(st.name)}
+                  style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', background: categoryModalStore === st.name ? '#2563eb' : '#f1f5f9', color: categoryModalStore === st.name ? '#fff' : '#64748b' }}
+                >
+                  {st.name}
+                </button>
+              ))}
+            </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
               <input placeholder="예: 메인요리, 사이드, 음료" value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)} style={{ flex: 1, padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }} />
@@ -2028,16 +2087,16 @@ export default function App() {
             </div>
             {/* 카테고리 수가 많아져도 입력창/닫기 버튼은 항상 보이도록, 목록만 정해진 높이 안에서 스크롤되게 한다 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', maxHeight: '320px', overflowY: 'auto', paddingRight: '2px' }}>
-              {categories.map((cat, idx) => (
+              {categoryModalList.map((cat, idx) => (
                 <div
                   key={cat.id}
                   draggable={editingCategoryId !== cat.id}
                   onDragStart={() => setDraggedCategoryIdx(idx)}
-                  onDragOver={handleDragOverItem('categories', idx)}
+                  onDragOver={handleDragOverItem('categoryModalList', idx)}
                   onDragLeave={clearDragIndicator}
                   onDragEnd={clearDragIndicator}
                   onDrop={() => handleCategoryDrop(draggedCategoryIdx, idx)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '9px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', ...getDropLineStyle('categories', idx) }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '9px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', ...getDropLineStyle('categoryModalList', idx) }}
                 >
                   {editingCategoryId === cat.id ? (
                     <>
@@ -2075,9 +2134,18 @@ export default function App() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: isMobile ? '460px' : '760px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
             <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>🧩 부가옵션 관리</h3>
-            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
-              현재 선택된 가게: <strong style={{ color: '#2563eb' }}>{selectedMgmtStore}</strong> · 여기서 만든 옵션 그룹은 메뉴 등록/수정 시 선택해서 붙일 수 있습니다.
-            </p>
+            {/* 메뉴관리 탭의 현재 탭과 별개로, 이 모달 안에서 관리할 가게를 바로 선택할 수 있다 (기본값은 모달을 열 때의 현재 탭) */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              {storeTags.map(st => (
+                <button
+                  key={st.id}
+                  onClick={() => setOptionGroupModalStore(st.name)}
+                  style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', background: optionGroupModalStore === st.name ? '#2563eb' : '#f1f5f9', color: optionGroupModalStore === st.name ? '#fff' : '#64748b' }}
+                >
+                  {st.name}
+                </button>
+              ))}
+            </div>
 
             {optionGroups.length === 0 && (
               <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px', textAlign: 'center', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
