@@ -1362,24 +1362,28 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
               <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0, paddingTop: '6px' }}>주문 / 배달 구분</label>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
-                {orderTypes.map(ot => (
-                  <button
-                    key={ot.id}
-                    onClick={() => setOrderType(ot.id)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '16px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      background: orderType === ot.id ? '#10b981' : '#f1f5f9',
-                      color: orderType === ot.id ? '#fff' : '#64748b'
-                    }}
-                  >
-                    {ot.name}
-                  </button>
-                ))}
+                {orderTypes.map(ot => {
+                  const c = getFilterSelectedColor(getOrderTypeColor(ot.name));
+                  const isSel = orderType === ot.id;
+                  return (
+                    <button
+                      key={ot.id}
+                      onClick={() => setOrderType(ot.id)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '16px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        background: isSel ? c.bg : '#f1f5f9',
+                        color: isSel ? c.text : '#64748b'
+                      }}
+                    >
+                      {ot.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1387,24 +1391,28 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
               <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0 }}>결제 구분</label>
               <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
-                {['카드', '현금'].map(pt => (
-                  <button
-                    key={pt}
-                    onClick={() => setPaymentType(pt)}
-                    style={{
-                      padding: '6px 16px',
-                      borderRadius: '16px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      background: paymentType === pt ? '#10b981' : '#f1f5f9',
-                      color: paymentType === pt ? '#fff' : '#64748b',
-                    }}
-                  >
-                    {pt}
-                  </button>
-                ))}
+                {['카드', '현금'].map(pt => {
+                  const c = getFilterSelectedColor(getPaymentColor(pt));
+                  const isSel = paymentType === pt;
+                  return (
+                    <button
+                      key={pt}
+                      onClick={() => setPaymentType(pt)}
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '16px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        background: isSel ? c.bg : '#f1f5f9',
+                        color: isSel ? c.text : '#64748b',
+                      }}
+                    >
+                      {pt}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1475,25 +1483,29 @@ export default function App() {
           {/* 메뉴 선택 패널 */}
           <div style={{ flex: 1, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: '100%' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
-              {storeTags.map(tag => (
-                <button
-                  key={tag.id}
-                  onClick={() => setSelectedPosStore(tag.name)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: '16px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: selectedPosStore === tag.name ? '#0f172a' : '#f1f5f9',
-                    color: selectedPosStore === tag.name ? '#fff' : '#64748b',
-                    fontWeight: 'bold',
-                    fontSize: '13px',
-                    flexShrink: 0
-                  }}
-                >
-                  {tag.name}
-                </button>
-              ))}
+              {storeTags.map(tag => {
+                const c = getFilterSelectedColor(getStoreColor(tag.name));
+                const isSel = selectedPosStore === tag.name;
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => setSelectedPosStore(tag.name)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: isSel ? c.bg : '#f1f5f9',
+                      color: isSel ? c.text : '#64748b',
+                      fontWeight: 'bold',
+                      fontSize: '13px',
+                      flexShrink: 0
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
@@ -1844,9 +1856,13 @@ export default function App() {
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            {storeTags.map(st => (
-              <button key={st.id} onClick={() => setSelectedMgmtStore(st.name)} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: selectedMgmtStore === st.name ? '#2563eb' : '#f1f5f9', color: selectedMgmtStore === st.name ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>{st.name}</button>
-            ))}
+            {storeTags.map(st => {
+              const c = getFilterSelectedColor(getStoreColor(st.name));
+              const isSel = selectedMgmtStore === st.name;
+              return (
+                <button key={st.id} onClick={() => setSelectedMgmtStore(st.name)} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: isSel ? c.bg : '#f1f5f9', color: isSel ? c.text : '#64748b', fontWeight: 'bold', fontSize: '13px' }}>{st.name}</button>
+              );
+            })}
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', paddingBottom: '6px', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
@@ -1887,56 +1903,90 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ overflowX: 'auto', width: '100%' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '560px' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
-                  <th style={{ width: '30px' }}></th>
-                  <th>가게</th><th>카테고리</th><th>메뉴명</th><th>가격</th><th style={{ width: '80px' }}>부가옵션</th><th style={{ width: '130px' }}>관리</th>
-                </tr>
-              </thead>
-              <tbody>
-                {menus.filter(m => {
-                  const storeMatch = !selectedMgmtStore || m.store_tag === selectedMgmtStore;
-                  const menuCatName = m.categories?.name || '카테고리 없음';
-                  const catMatch = selectedMgmtCategory === '전체' || menuCatName === selectedMgmtCategory;
-                  return storeMatch && catMatch;
-                }).map((m, idx) => (
-                  <tr
-                    key={m.id}
-                    draggable
-                    onDragStart={() => setDraggedMenuIdx(idx)}
-                    onDragOver={handleDragOverItem('menus', idx)}
-                    onDragLeave={clearDragIndicator}
-                    onDragEnd={clearDragIndicator}
-                    onDrop={() => handleGenericDrop(menus, setMenus, draggedMenuIdx, idx)}
-                    style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', ...getDropLineStyle('menus', idx) }}
-                  >
-                    <td style={{ color: '#94a3b8' }}>☰</td>
-                    <td><span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span></td>
-                    <td><span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span></td>
-                    <td style={{ fontWeight: 'bold', fontSize: '12px' }}>{m.name}</td>
-                    <td style={{ fontSize: '12px' }}>{m.price.toLocaleString()}원</td>
-                    <td style={{ fontSize: '11px', color: (m.options || []).length > 0 ? '#2563eb' : '#94a3b8', fontWeight: 'bold' }}>
-                      {(m.options || []).length > 0 ? `${m.options.length}개` : '없음'}
-                    </td>
-                    <td>
-                      <button onClick={() => {
-                        const initialCatId = m.categories?.id || m.category_id || '';
-                        const initialOptionGroupIds = (m.options || []).map(g => g.id);
-                        setEditingMenuModal({ ...m, category_id: initialCatId, option_group_ids: initialOptionGroupIds });
-                        if (m.store_tag) {
-                          fetchModalCategories(m.store_tag);
-                          fetchModalOptionGroups(m.store_tag);
-                        }
-                      }} style={{ marginRight: '4px', padding: '5px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
-                      <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '5px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
-                    </td>
-                  </tr>
+          {(() => {
+            const filteredMenus = menus.filter(m => {
+              const storeMatch = !selectedMgmtStore || m.store_tag === selectedMgmtStore;
+              const menuCatName = m.categories?.name || '카테고리 없음';
+              const catMatch = selectedMgmtCategory === '전체' || menuCatName === selectedMgmtCategory;
+              return storeMatch && catMatch;
+            });
+
+            const openEditModal = (m) => {
+              const initialCatId = m.categories?.id || m.category_id || '';
+              const initialOptionGroupIds = (m.options || []).map(g => g.id);
+              setEditingMenuModal({ ...m, category_id: initialCatId, option_group_ids: initialOptionGroupIds });
+              if (m.store_tag) {
+                fetchModalCategories(m.store_tag);
+                fetchModalOptionGroups(m.store_tag);
+              }
+            };
+
+            // [모바일 대응] 좁은 화면에서는 테이블이 옆으로 밀려 잘려 보이므로, 정산 화면과 같은 방식으로
+            // 메뉴 하나당 카드 한 장으로 세로로 쌓아 보여준다 (드래그 순서변경은 PC 화면에서만 지원).
+            return isMobile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {filteredMenus.map((m) => (
+                  <div key={m.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                      <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span>
+                      <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span>
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', wordBreak: 'break-all' }}>{m.name}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#2563eb' }}>{m.price.toLocaleString()}원</div>
+                        <div style={{ fontSize: '11px', color: (m.options || []).length > 0 ? '#2563eb' : '#94a3b8', fontWeight: 'bold', marginTop: '2px' }}>
+                          부가옵션 {(m.options || []).length > 0 ? `${m.options.length}개` : '없음'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button onClick={() => openEditModal(m)} style={{ padding: '5px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
+                        <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '5px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '560px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
+                      <th style={{ width: '30px' }}></th>
+                      <th>가게</th><th>카테고리</th><th>메뉴명</th><th>가격</th><th style={{ width: '80px' }}>부가옵션</th><th style={{ width: '130px' }}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMenus.map((m, idx) => (
+                      <tr
+                        key={m.id}
+                        draggable
+                        onDragStart={() => setDraggedMenuIdx(idx)}
+                        onDragOver={handleDragOverItem('menus', idx)}
+                        onDragLeave={clearDragIndicator}
+                        onDragEnd={clearDragIndicator}
+                        onDrop={() => handleGenericDrop(menus, setMenus, draggedMenuIdx, idx)}
+                        style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', ...getDropLineStyle('menus', idx) }}
+                      >
+                        <td style={{ color: '#94a3b8' }}>☰</td>
+                        <td><span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{m.store_tag || '미지정'}</span></td>
+                        <td><span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{m.categories?.name || '없음'}</span></td>
+                        <td style={{ fontWeight: 'bold', fontSize: '12px' }}>{m.name}</td>
+                        <td style={{ fontSize: '12px' }}>{m.price.toLocaleString()}원</td>
+                        <td style={{ fontSize: '11px', color: (m.options || []).length > 0 ? '#2563eb' : '#94a3b8', fontWeight: 'bold' }}>
+                          {(m.options || []).length > 0 ? `${m.options.length}개` : '없음'}
+                        </td>
+                        <td>
+                          <button onClick={() => openEditModal(m)} style={{ marginRight: '4px', padding: '5px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>수정</button>
+                          <button onClick={() => handleDeleteMenu(m.id)} style={{ padding: '5px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>삭제</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2070,15 +2120,19 @@ export default function App() {
             <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px' }}>🏷️ 메뉴 카테고리 관리</h3>
             {/* 메뉴관리 탭의 현재 탭과 별개로, 이 모달 안에서 관리할 가게를 바로 선택할 수 있다 (기본값은 모달을 열 때의 현재 탭) */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-              {storeTags.map(st => (
-                <button
-                  key={st.id}
-                  onClick={() => setCategoryModalStore(st.name)}
-                  style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', background: categoryModalStore === st.name ? '#2563eb' : '#f1f5f9', color: categoryModalStore === st.name ? '#fff' : '#64748b' }}
-                >
-                  {st.name}
-                </button>
-              ))}
+              {storeTags.map(st => {
+                const c = getFilterSelectedColor(getStoreColor(st.name));
+                const isSel = categoryModalStore === st.name;
+                return (
+                  <button
+                    key={st.id}
+                    onClick={() => setCategoryModalStore(st.name)}
+                    style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', background: isSel ? c.bg : '#f1f5f9', color: isSel ? c.text : '#64748b' }}
+                  >
+                    {st.name}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
@@ -2136,15 +2190,19 @@ export default function App() {
             <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>🧩 부가옵션 관리</h3>
             {/* 메뉴관리 탭의 현재 탭과 별개로, 이 모달 안에서 관리할 가게를 바로 선택할 수 있다 (기본값은 모달을 열 때의 현재 탭) */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
-              {storeTags.map(st => (
-                <button
-                  key={st.id}
-                  onClick={() => setOptionGroupModalStore(st.name)}
-                  style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', background: optionGroupModalStore === st.name ? '#2563eb' : '#f1f5f9', color: optionGroupModalStore === st.name ? '#fff' : '#64748b' }}
-                >
-                  {st.name}
-                </button>
-              ))}
+              {storeTags.map(st => {
+                const c = getFilterSelectedColor(getStoreColor(st.name));
+                const isSel = optionGroupModalStore === st.name;
+                return (
+                  <button
+                    key={st.id}
+                    onClick={() => setOptionGroupModalStore(st.name)}
+                    style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', background: isSel ? c.bg : '#f1f5f9', color: isSel ? c.text : '#64748b' }}
+                  >
+                    {st.name}
+                  </button>
+                );
+              })}
             </div>
 
             {optionGroups.length === 0 && (
@@ -2295,48 +2353,56 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px', gap: '12px' }}>
               <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0, paddingTop: '6px' }}>주문 / 배달 구분</label>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
-                {orderTypes.map(ot => (
-                  <button
-                    key={ot.id}
-                    onClick={() => setEditingOrderModal({ ...editingOrderModal, order_type_id: ot.id })}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '14px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      background: editingOrderModal.order_type_id === ot.id ? '#10b981' : '#f1f5f9',
-                      color: editingOrderModal.order_type_id === ot.id ? '#fff' : '#64748b'
-                    }}
-                  >
-                    {ot.name}
-                  </button>
-                ))}
+                {orderTypes.map(ot => {
+                  const c = getFilterSelectedColor(getOrderTypeColor(ot.name));
+                  const isSel = editingOrderModal.order_type_id === ot.id;
+                  return (
+                    <button
+                      key={ot.id}
+                      onClick={() => setEditingOrderModal({ ...editingOrderModal, order_type_id: ot.id })}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        background: isSel ? c.bg : '#f1f5f9',
+                        color: isSel ? c.text : '#64748b'
+                      }}
+                    >
+                      {ot.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '12px' }}>
               <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', width: '100px', flexShrink: 0 }}>결제 구분</label>
               <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
-                {['카드', '현금'].map(pt => (
-                  <button
-                    key={pt}
-                    onClick={() => setEditingOrderModal({ ...editingOrderModal, payment_type: pt })}
-                    style={{
-                      padding: '6px 16px',
-                      borderRadius: '14px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      background: editingOrderModal.payment_type === pt ? '#10b981' : '#f1f5f9',
-                      color: editingOrderModal.payment_type === pt ? '#fff' : '#64748b'
-                    }}
-                  >
-                    {pt}
-                  </button>
-                ))}
+                {['카드', '현금'].map(pt => {
+                  const c = getFilterSelectedColor(getPaymentColor(pt));
+                  const isSel = editingOrderModal.payment_type === pt;
+                  return (
+                    <button
+                      key={pt}
+                      onClick={() => setEditingOrderModal({ ...editingOrderModal, payment_type: pt })}
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        background: isSel ? c.bg : '#f1f5f9',
+                        color: isSel ? c.text : '#64748b'
+                      }}
+                    >
+                      {pt}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
