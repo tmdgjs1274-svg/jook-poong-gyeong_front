@@ -105,6 +105,8 @@ export default function App() {
 
   const [editingOptionGroupId, setEditingOptionGroupId] = useState(null);
   const [editingOptionGroupName, setEditingOptionGroupName] = useState('');
+  const [editingOptionGroupRequired, setEditingOptionGroupRequired] = useState(false);
+  const [editingOptionGroupMultiple, setEditingOptionGroupMultiple] = useState(false);
   const [editingOptionItemId, setEditingOptionItemId] = useState(null);
   const [editingOptionItemDraft, setEditingOptionItemDraft] = useState({ name: '', price: '' });
 
@@ -774,22 +776,31 @@ export default function App() {
   const startEditOptionGroup = (group) => {
     setEditingOptionGroupId(group.id);
     setEditingOptionGroupName(group.name);
+    setEditingOptionGroupRequired(!!group.is_required);
+    setEditingOptionGroupMultiple(!!group.allow_multiple);
   };
 
   const cancelEditOptionGroup = () => {
     setEditingOptionGroupId(null);
     setEditingOptionGroupName('');
+    setEditingOptionGroupRequired(false);
+    setEditingOptionGroupMultiple(false);
   };
 
+  // 그룹명뿐 아니라 필수여부/중복선택허용도 함께 수정할 수 있게 한다.
   const handleRenameOptionGroup = async () => {
     if (!editingOptionGroupName.trim()) return alert('옵션 그룹명을 입력해주세요.');
     try {
-      await axios.put(`${API_BASE_URL}/option-groups/${editingOptionGroupId}`, { name: editingOptionGroupName.trim() });
-      showToast('옵션 그룹명이 수정되었습니다.');
+      await axios.put(`${API_BASE_URL}/option-groups/${editingOptionGroupId}`, {
+        name: editingOptionGroupName.trim(),
+        is_required: editingOptionGroupRequired,
+        allow_multiple: editingOptionGroupMultiple
+      });
+      showToast('옵션 그룹이 수정되었습니다.');
       cancelEditOptionGroup();
       refreshOptionGroupsEverywhere();
     } catch (err) {
-      alert(`옵션 그룹명 수정 실패: ${err.response?.data?.error || err.message}`);
+      alert(`옵션 그룹 수정 실패: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -921,43 +932,88 @@ export default function App() {
     ? filteredRangeOrders.filter(o => (o.created_at || '').split('T')[0] === drillDownDate)
     : [];
 
-  // 가게구분/배달구분/결제수단 배지·필터버튼 공통 색상표 - 연한(pale) 톤으로 구분별 색상을 다르게 하여
-  // 필터 버튼과 주문내역 배지 어디서나 같은 구분은 같은 색으로 보이도록 통일한다.
-  const salesBadgeColors = {
-    store: { bg: '#e0e7ff', text: '#4338ca' },    // 가게구분: 인디고 계열
-    orderType: { bg: '#fef3c7', text: '#b45309' }, // 배달구분(구분): 앰버 계열
-    payment: { bg: '#cffafe', text: '#0e7490' },   // 결제수단: 시안 계열
+  // 가게구분/배달구분/결제수단 배지·필터버튼 공통 색상표 - 연한(pale) 톤 12가지를 준비해두고,
+  // 같은 구분(예: 가게구분) 안에서도 항목마다(조면장/죽풍경/밀면회관 등) 서로 다른 색을 쓰도록 한다.
+  // 필터 버튼과 주문내역 배지 어디서나 "같은 항목은 항상 같은 색"이 되도록 이 팔레트에서만 색을 골라 쓴다.
+  const salesPaletteColors = [
+    { bg: '#e0e7ff', text: '#4338ca' }, // 인디고
+    { bg: '#fef3c7', text: '#b45309' }, // 앰버
+    { bg: '#cffafe', text: '#0e7490' }, // 시안
+    { bg: '#fce7f3', text: '#be185d' }, // 핑크
+    { bg: '#dcfce7', text: '#15803d' }, // 그린
+    { bg: '#ede9fe', text: '#6d28d9' }, // 바이올렛
+    { bg: '#ffe4e6', text: '#be123c' }, // 로즈
+    { bg: '#e0f2fe', text: '#0369a1' }, // 스카이
+    { bg: '#ffedd5', text: '#c2410c' }, // 오렌지
+    { bg: '#ecfccb', text: '#4d7c0f' }, // 라임
+    { bg: '#fae8ff', text: '#a21caf' }, // 퍽시아
+    { bg: '#ccfbf1', text: '#0f766e' }, // 틸
+  ];
+  const SALES_COLOR_UNSELECTED = { bg: '#e2e8f0', text: '#334155' };
+  // 카테고리별로 팔레트 시작 위치를 다르게 오프셋을 주어, 가게구분 1번째 항목과 배달구분 1번째 항목이
+  // 우연히 같은 색으로 겹치는 경우를 최대한 줄인다.
+  const getPaletteColorAt = (offset, index) => salesPaletteColors[(offset + index) % salesPaletteColors.length];
+  const getStoreColor = (name) => {
+    const idx = storeTags.findIndex(s => s.name === name);
+    return idx === -1 ? SALES_COLOR_UNSELECTED : getPaletteColorAt(0, idx);
+  };
+  const getOrderTypeColor = (name) => {
+    const idx = orderTypes.findIndex(o => o.name === name);
+    return idx === -1 ? SALES_COLOR_UNSELECTED : getPaletteColorAt(4, idx);
+  };
+  const getPaymentColor = (name) => {
+    const idx = ['카드', '현금'].indexOf(name);
+    return idx === -1 ? SALES_COLOR_UNSELECTED : getPaletteColorAt(8, idx);
+  };
+  // 한 주문에 여러 가게의 메뉴가 섞여 있을 수 있으므로, 배지 색은 그 중 첫번째 가게구분 기준으로 정한다.
+  const getOrderStoreColor = (order) => {
+    const tags = [...new Set((order.order_items || []).map(i => i.menus?.store_tag).filter(Boolean))];
+    return tags.length > 0 ? getStoreColor(tags[0]) : SALES_COLOR_UNSELECTED;
   };
 
   // 가게구분/배달구분/결제수단 필터 UI - 일단위/월단위/연단위 화면에서 공통으로 사용한다.
+  // "전체"는 특정 항목이 아니므로 고정된 파란색으로, 나머지는 항목별로 다른 팔레트 색을 선택 시 보여준다.
   const renderSalesFilterRow = () => (
     <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? salesBadgeColors.store.bg : '#e2e8f0', color: filterStore === '전체' ? salesBadgeColors.store.text : '#334155', fontWeight: 'bold' }}>전체</button>
-          {storeTags.map(st => (
-            <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? salesBadgeColors.store.bg : '#e2e8f0', color: filterStore === st.name ? salesBadgeColors.store.text : '#334155', fontWeight: 'bold' }}>{st.name}</button>
-          ))}
+          <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          {storeTags.map(st => {
+            const c = getStoreColor(st.name);
+            const isSel = filterStore === st.name;
+            return (
+              <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{st.name}</button>
+            );
+          })}
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? salesBadgeColors.orderType.bg : '#e2e8f0', color: filterOrderType === '전체' ? salesBadgeColors.orderType.text : '#334155', fontWeight: 'bold' }}>전체</button>
-          {orderTypes.map(ot => (
-            <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? salesBadgeColors.orderType.bg : '#e2e8f0', color: filterOrderType === ot.name ? salesBadgeColors.orderType.text : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
-          ))}
+          <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          {orderTypes.map(ot => {
+            const c = getOrderTypeColor(ot.name);
+            const isSel = filterOrderType === ot.name;
+            return (
+              <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
+            );
+          })}
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          {['전체', '카드', '현금'].map(pt => (
-            <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? salesBadgeColors.payment.bg : '#e2e8f0', color: filterPaymentType === pt ? salesBadgeColors.payment.text : '#334155', fontWeight: 'bold' }}>{pt}</button>
-          ))}
+          <button onClick={() => setFilterPaymentType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === '전체' ? '#2563eb' : '#e2e8f0', color: filterPaymentType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          {['카드', '현금'].map(pt => {
+            const c = getPaymentColor(pt);
+            const isSel = filterPaymentType === pt;
+            return (
+              <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{pt}</button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1045,12 +1101,15 @@ export default function App() {
           ? `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
           : order.created_at;
         const storeTagsLabel = getOrderStoreTags(order);
+        const storeColor = getOrderStoreColor(order);
+        const paymentColor = getPaymentColor(order.payment_type || '카드');
+        const orderTypeColor = getOrderTypeColor(order.order_types?.name || '매장');
         const itemsLabel = order.order_items?.map(i => `${formatOrderItemLabel(i)}(${i.quantity})`).join(', ');
         const badges = (
           <>
-            <span style={{ background: salesBadgeColors.store.bg, color: salesBadgeColors.store.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{storeTagsLabel}</span>
-            <span style={{ background: salesBadgeColors.payment.bg, color: salesBadgeColors.payment.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
-            <span style={{ background: salesBadgeColors.orderType.bg, color: salesBadgeColors.orderType.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+            <span style={{ background: storeColor.bg, color: storeColor.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{storeTagsLabel}</span>
+            <span style={{ background: paymentColor.bg, color: paymentColor.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+            <span style={{ background: orderTypeColor.bg, color: orderTypeColor.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
           </>
         );
 
@@ -1083,19 +1142,31 @@ export default function App() {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px' }}>
         {editingOptionGroupId === group.id ? (
-          <>
-            <input
-              autoFocus
-              value={editingOptionGroupName}
-              onChange={e => setEditingOptionGroupName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionGroup(); if (e.key === 'Escape') cancelEditOptionGroup(); }}
-              style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
-            />
-            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-              <button onClick={handleRenameOptionGroup} style={{ padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>저장</button>
-              <button onClick={cancelEditOptionGroup} style={{ padding: '4px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>취소</button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                autoFocus
+                value={editingOptionGroupName}
+                onChange={e => setEditingOptionGroupName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionGroup(); if (e.key === 'Escape') cancelEditOptionGroup(); }}
+                style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+              />
+              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                <button onClick={handleRenameOptionGroup} style={{ padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>저장</button>
+                <button onClick={cancelEditOptionGroup} style={{ padding: '4px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>취소</button>
+              </div>
             </div>
-          </>
+            <div style={{ display: 'flex', gap: '14px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#334155', cursor: 'pointer' }}>
+                <input type="checkbox" checked={editingOptionGroupRequired} onChange={e => setEditingOptionGroupRequired(e.target.checked)} />
+                필수 선택
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#334155', cursor: 'pointer' }}>
+                <input type="checkbox" checked={editingOptionGroupMultiple} onChange={e => setEditingOptionGroupMultiple(e.target.checked)} />
+                중복 선택 허용
+              </label>
+            </div>
+          </div>
         ) : (
           <>
             <div>
@@ -1495,9 +1566,9 @@ export default function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', color: '#64748b' }}>
                         <span>{formattedTime}</span>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          <span style={{ background: salesBadgeColors.store.bg, color: salesBadgeColors.store.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{getOrderStoreTags(order)}</span>
-                          <span style={{ background: salesBadgeColors.payment.bg, color: salesBadgeColors.payment.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
-                          <span style={{ background: salesBadgeColors.orderType.bg, color: salesBadgeColors.orderType.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+                          <span style={{ background: getOrderStoreColor(order).bg, color: getOrderStoreColor(order).text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{getOrderStoreTags(order)}</span>
+                          <span style={{ background: getPaymentColor(order.payment_type || '카드').bg, color: getPaymentColor(order.payment_type || '카드').text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+                          <span style={{ background: getOrderTypeColor(order.order_types?.name || '매장').bg, color: getOrderTypeColor(order.order_types?.name || '매장').text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
                         </div>
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', wordBreak: 'break-all' }}>
@@ -1563,17 +1634,17 @@ export default function App() {
                           <td style={{ color: '#94a3b8' }}>☰</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
                           <td>
-                            <span style={{ background: salesBadgeColors.store.bg, color: salesBadgeColors.store.text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            <span style={{ background: getOrderStoreColor(order).bg, color: getOrderStoreColor(order).text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {getOrderStoreTags(order)}
                             </span>
                           </td>
                           <td>
-                            <span style={{ background: salesBadgeColors.payment.bg, color: salesBadgeColors.payment.text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            <span style={{ background: getPaymentColor(order.payment_type || '카드').bg, color: getPaymentColor(order.payment_type || '카드').text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {order.payment_type || '카드'}
                             </span>
                           </td>
                           <td>
-                            <span style={{ background: salesBadgeColors.orderType.bg, color: salesBadgeColors.orderType.text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            <span style={{ background: getOrderTypeColor(order.order_types?.name || '매장').bg, color: getOrderTypeColor(order.order_types?.name || '매장').text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {order.order_types?.name || '매장'}
                             </span>
                           </td>
