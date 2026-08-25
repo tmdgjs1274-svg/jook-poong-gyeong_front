@@ -1025,7 +1025,7 @@ export default function App() {
   // "전체"는 특정 항목이 아니므로 고정된 파란색으로, 나머지는 항목별로 다른 팔레트 색을 선택 시 보여준다.
   const renderSalesFilterRow = () => (
     <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isMobile ? '1 1 100%' : '0 0 auto' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
@@ -1039,7 +1039,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isMobile ? '1 1 100%' : '0 0 auto' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
@@ -1111,18 +1111,31 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', minWidth: useMobileLayout ? `${data.length * 40}px` : '100%', height: '150px', padding: '8px 4px', borderBottom: '2px solid #e2e8f0', boxSizing: 'border-box' }}>
             {data.map(d => {
               const isSelected = clickable && selectedKey === d.key;
+              // d.key가 "YYYY-MM-DD" 형태(일단위 막대)일 때만 요일을 계산해서 "(토)"처럼 보여준다.
+              // (연단위 차트의 월별 막대는 key가 "YYYY-MM"이라 요일이 의미가 없으므로 표시하지 않는다.)
+              let weekdayLabel = '';
+              let weekdayColor = '#94a3b8';
+              if (/^\d{4}-\d{2}-\d{2}$/.test(d.key)) {
+                const [yy, mm, dd] = d.key.split('-').map(Number);
+                const weekday = new Date(yy, mm - 1, dd).getDay();
+                weekdayLabel = ['일', '월', '화', '수', '목', '금', '토'][weekday];
+                weekdayColor = weekday === 0 ? '#dc2626' : weekday === 6 ? '#2563eb' : '#94a3b8';
+              }
               return (
                 <div
                   key={d.key}
                   onClick={clickable ? () => onSelect(d.key) : undefined}
-                  title={`${d.label}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
+                  title={`${d.label}${weekdayLabel ? `(${weekdayLabel})` : ''}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: useMobileLayout ? '0 0 40px' : 1, minWidth: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px', width: '100%', height: '110px' }}>
                     <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
                     <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
                   </div>
-                  <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal' }}>{d.label}</div>
+                  <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal', lineHeight: '1.3' }}>{d.label}</div>
+                  {weekdayLabel && (
+                    <div style={{ fontSize: '9px', color: isSelected ? '#2563eb' : weekdayColor, fontWeight: isSelected ? 'bold' : 'normal' }}>({weekdayLabel})</div>
+                  )}
                 </div>
               );
             })}
@@ -1329,13 +1342,15 @@ export default function App() {
 
       {/* 상단 네비게이션 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', backgroundColor: '#fff', padding: '12px 16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flexDirection: isMobile ? 'column' : 'row', gap: '10px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', justifyContent: 'center' }}>
-          <button onClick={() => setActiveTab('pos')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b', fontSize: '14px' }}>주문 입력</button>
-          <button onClick={() => setActiveTab('sales')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b', fontSize: '14px' }}>매출정산</button>
+        {/* [공간 활용] 메뉴관리/가게·배달은 상대적으로 덜 자주 쓰는 탭이라, PC에서는 이 그룹의 비중(flex)을 줄여
+            주문입력/매출정산보다 좁게 잡는다. 버튼 자체엔 minWidth를 두지 않아(기본 min-width:auto) 글자가 잘리지 않는다. */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto', flex: isMobile ? 'none' : '1.3 1 0%', justifyContent: 'center' }}>
+          <button onClick={() => setActiveTab('pos')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b', fontSize: '14px', whiteSpace: 'nowrap' }}>주문 입력</button>
+          <button onClick={() => setActiveTab('sales')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b', fontSize: '14px', whiteSpace: 'nowrap' }}>매출정산</button>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', justifyContent: 'center' }}>
-          <button onClick={() => setActiveTab('menuMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'menuMgmt' ? '#10b981' : '#f1f5f9', color: activeTab === 'menuMgmt' ? '#fff' : '#64748b', fontSize: '14px' }}>⚙️ 메뉴 관리</button>
-          <button onClick={() => setActiveTab('categoryMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'categoryMgmt' ? '#8b5cf6' : '#f1f5f9', color: activeTab === 'categoryMgmt' ? '#fff' : '#64748b', fontSize: '14px' }}>🏷️ 가게/배달</button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto', flex: isMobile ? 'none' : '1 1 0%', justifyContent: 'center' }}>
+          <button onClick={() => setActiveTab('menuMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'menuMgmt' ? '#10b981' : '#f1f5f9', color: activeTab === 'menuMgmt' ? '#fff' : '#64748b', fontSize: '14px', whiteSpace: 'nowrap' }}>⚙️ 메뉴 관리</button>
+          <button onClick={() => setActiveTab('categoryMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'categoryMgmt' ? '#8b5cf6' : '#f1f5f9', color: activeTab === 'categoryMgmt' ? '#fff' : '#64748b', fontSize: '14px', whiteSpace: 'nowrap' }}>🏷️ 가게/배달</button>
         </div>
       </div>
 
@@ -1578,14 +1593,15 @@ export default function App() {
           {/* ===== 일단위 (기존 화면 그대로) ===== */}
           {salesViewMode === 'daily' && (
             <>
-              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>일자 목록</h3>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {/* [공간 활용] PC에서는 콤보박스가 카드 전체 너비를 차지할 필요가 없으므로, 라벨과 한 줄에 좁게 배치한다 (모바일은 기존처럼 전체 너비) */}
+              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', flexShrink: 0 }}>일자 목록</h3>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
                   <select
                     value={selectedDate}
                     onChange={e => setSelectedDate(e.target.value)}
                     style={{
-                      width: '100%',
+                      width: isMobile ? '100%' : '260px',
                       padding: '10px',
                       borderRadius: '8px',
                       border: '1px solid #cbd5e1',
@@ -1744,12 +1760,12 @@ export default function App() {
           {/* ===== 월단위 ===== */}
           {salesViewMode === 'monthly' && (
             <>
-              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>조회 월</h3>
+              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', flexShrink: 0 }}>조회 월</h3>
                 <select
                   value={selectedMonth}
                   onChange={e => { setSelectedMonth(e.target.value); setDrillDownDate(null); }}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
+                  style={{ width: isMobile ? '100%' : '260px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
                 >
                   {availableMonths.length === 0 && <option value="">등록된 매출 월이 없습니다</option>}
                   {availableMonths.map(m => (
@@ -1793,12 +1809,12 @@ export default function App() {
           {/* ===== 연단위 ===== */}
           {salesViewMode === 'yearly' && (
             <>
-              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>조회 연도</h3>
+              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', flexShrink: 0 }}>조회 연도</h3>
                 <select
                   value={selectedYear}
                   onChange={e => setSelectedYear(e.target.value)}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
+                  style={{ width: isMobile ? '100%' : '260px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
                 >
                   {availableYears.length === 0 && <option value="">등록된 매출 연도가 없습니다</option>}
                   {availableYears.map(y => (
