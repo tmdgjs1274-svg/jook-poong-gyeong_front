@@ -2279,14 +2279,15 @@ export default function App() {
         const groups = menu.options || [];
         return (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-            <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
+            <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '88vh', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px', flexShrink: 0 }}>
                 <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{menu.name}</span>
                 <span style={{ fontSize: '12px', color: '#64748b' }}>기본가 {menu.price.toLocaleString()}원</span>
               </div>
-              <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0, marginBottom: '16px' }}>옵션을 선택해주세요.</p>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0, marginBottom: '16px', flexShrink: 0 }}>옵션을 선택해주세요.</p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '18px' }}>
+              {/* 옵션이 많아져도 하단의 취소/장바구니 담기 버튼이 항상 보이도록, 옵션 목록만 이 영역 안에서 스크롤되게 한다. */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '18px', overflowY: 'auto', minHeight: 0 }}>
                 {groups.map(group => (
                   <div key={group.id}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
@@ -2329,7 +2330,7 @@ export default function App() {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                 <button onClick={() => setExpandedMenuOptions(null)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
                 <button onClick={confirmOptionSelection} style={{ flex: 2, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>장바구니 담기</button>
               </div>
