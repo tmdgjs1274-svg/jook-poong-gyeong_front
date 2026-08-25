@@ -103,6 +103,8 @@ export default function App() {
   const [draggedStoreIdx, setDraggedStoreIdx] = useState(null);
   const [draggedOrderTypeIdx, setDraggedOrderTypeIdx] = useState(null);
   const [draggedCategoryIdx, setDraggedCategoryIdx] = useState(null);
+  const [draggedOptionGroupIdx, setDraggedOptionGroupIdx] = useState(null);
+  const [draggedOptionItemIdx, setDraggedOptionItemIdx] = useState(null);
 
   // 드래그로 순서를 바꾸는 모든 목록에서 공통으로 쓰는 "드롭 위치 표시" 상태
   // { listId, idx, edge: 'before' | 'after' } - 어느 항목의 위/아래로 들어갈지를 나타낸다.
@@ -663,6 +665,42 @@ export default function App() {
     }
   };
 
+  const handleOptionGroupDrop = async (dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
+    setDraggedOptionGroupIdx(null);
+    if (dragIdx === null || dragIdx === dropIdx) return;
+    const newList = reorderList(optionGroups, dragIdx, dropIdx, edge);
+    setOptionGroups(newList);
+
+    try {
+      await axios.put(`${API_BASE_URL}/option-groups/order`, { items: newList.map((item, index) => ({ id: item.id, display_order: index })) });
+      showToast('옵션 그룹 순서가 저장되었습니다.');
+    } catch (err) {
+      console.error(err);
+      alert('순서 저장 실패');
+    }
+  };
+
+  // 옵션 그룹 하나의 하위 옵션(항목) 순서를 바꾼다. listId를 그룹별로 다르게 줘서(`optionItems-${group.id}`)
+  // 여러 그룹의 드래그 인디케이터가 서로 섞이지 않게 한다.
+  const handleOptionItemDrop = async (group, dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
+    setDraggedOptionItemIdx(null);
+    if (dragIdx === null || dragIdx === dropIdx) return;
+    const newItems = reorderList(group.option_items || [], dragIdx, dropIdx, edge);
+    setOptionGroups(prev => prev.map(g => (g.id === group.id ? { ...g, option_items: newItems } : g)));
+
+    try {
+      await axios.put(`${API_BASE_URL}/option-items/order`, { items: newItems.map((item, index) => ({ id: item.id, display_order: index })) });
+      showToast('옵션 순서가 저장되었습니다.');
+    } catch (err) {
+      console.error(err);
+      alert('순서 저장 실패');
+    }
+  };
+
   const handleAddStoreTag = async () => {
     if (!newStoreInput) return;
     await axios.post(`${API_BASE_URL}/store-tags`, { name: newStoreInput });
@@ -897,6 +935,31 @@ export default function App() {
     clearDragIndicator();
     if (dragIdx === null || dragIdx === dropIdx) return;
     setList(reorderList(list, dragIdx, dropIdx, edge));
+  };
+
+  // 메뉴 목록 드래그 순서변경. 화면에 보이는 목록(filteredMenus)은 가게/카테고리 필터가 걸린 부분집합이라
+  // handleGenericDrop처럼 전체 menus 배열에 필터링된 인덱스를 그대로 적용하면 엉뚱한 항목이 뒤바뀌므로,
+  // 별도 함수로 (1) 필터된 목록 안에서만 순서를 바꾸고 (2) 그 결과를 전체 배열의 같은 위치들에 다시 끼워넣는다.
+  // 또한 카테고리/가게구분과 동일하게 새 순서를 서버(display_order)에 저장해서 새로고침 후에도 유지되게 한다.
+  const handleMenuDrop = async (filteredMenus, dragIdx, dropIdx) => {
+    const edge = dragIndicator?.edge || 'before';
+    clearDragIndicator();
+    setDraggedMenuIdx(null);
+    if (dragIdx === null || dragIdx === dropIdx) return;
+
+    const newFilteredList = reorderList(filteredMenus, dragIdx, dropIdx, edge);
+    const filteredIds = new Set(newFilteredList.map(m => m.id));
+    let cursor = 0;
+    const newMenus = menus.map(m => (filteredIds.has(m.id) ? newFilteredList[cursor++] : m));
+    setMenus(newMenus);
+
+    try {
+      await axios.put(`${API_BASE_URL}/menus/order`, { items: newFilteredList.map((m, index) => ({ id: m.id, display_order: index })) });
+      showToast('메뉴 순서가 저장되었습니다.');
+    } catch (err) {
+      console.error(err);
+      alert('메뉴 순서 저장 실패');
+    }
   };
 
   // 주문 상세 내역에 표시할 "메뉴명 (선택옵션1, 선택옵션2)" 형태의 텍스트를 만든다.
@@ -1247,8 +1310,17 @@ export default function App() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
-        {(group.option_items || []).map(opt => (
-          <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px', gap: '8px' }}>
+        {(group.option_items || []).map((opt, optIdx) => (
+          <div
+            key={opt.id}
+            draggable={editingOptionItemId !== opt.id}
+            onDragStart={() => setDraggedOptionItemIdx(optIdx)}
+            onDragOver={handleDragOverItem(`optionItems-${group.id}`, optIdx)}
+            onDragLeave={clearDragIndicator}
+            onDragEnd={clearDragIndicator}
+            onDrop={() => handleOptionItemDrop(group, draggedOptionItemIdx, optIdx)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px', gap: '8px', cursor: 'grab', ...getDropLineStyle(`optionItems-${group.id}`, optIdx) }}
+          >
             {editingOptionItemId === opt.id ? (
               <>
                 <input
@@ -1272,7 +1344,7 @@ export default function App() {
               </>
             ) : (
               <>
-                <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#94a3b8' }}>☰</span><span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span></div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
                     {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
@@ -1981,7 +2053,7 @@ export default function App() {
                         onDragOver={handleDragOverItem('menus', idx)}
                         onDragLeave={clearDragIndicator}
                         onDragEnd={clearDragIndicator}
-                        onDrop={() => handleGenericDrop(menus, setMenus, draggedMenuIdx, idx)}
+                        onDrop={() => handleMenuDrop(filteredMenus, draggedMenuIdx, idx)}
                         style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center', height: '48px', ...getDropLineStyle('menus', idx) }}
                       >
                         <td style={{ color: '#94a3b8' }}>☰</td>
@@ -2232,8 +2304,17 @@ export default function App() {
               <>
                 {/* 모바일: 기존처럼 그룹마다 카드를 세로로 쌓고, 목록만 스크롤되게 해서 입력창/닫기 버튼은 항상 보이게 한다 */}
                 <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '2px' }}>
-                  {optionGroups.map(group => (
-                    <div key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc' }}>
+                  {optionGroups.map((group, idx) => (
+                    <div
+                      key={group.id}
+                      draggable={editingOptionGroupId !== group.id}
+                      onDragStart={() => setDraggedOptionGroupIdx(idx)}
+                      onDragOver={handleDragOverItem('optionGroupsMobile', idx)}
+                      onDragLeave={clearDragIndicator}
+                      onDragEnd={clearDragIndicator}
+                      onDrop={() => handleOptionGroupDrop(draggedOptionGroupIdx, idx)}
+                      style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc', ...getDropLineStyle('optionGroupsMobile', idx) }}
+                    >
                       {renderOptionGroupDetail(group)}
                     </div>
                   ))}
@@ -2263,9 +2344,15 @@ export default function App() {
 
                 <div style={{ display: 'flex', gap: '14px', height: '440px' }}>
                   <div style={{ width: '220px', flexShrink: 0, overflowY: 'auto', borderRight: '1px solid #f1f5f9', paddingRight: '10px' }}>
-                    {optionGroups.map(group => (
+                    {optionGroups.map((group, idx) => (
                       <button
                         key={group.id}
+                        draggable
+                        onDragStart={() => setDraggedOptionGroupIdx(idx)}
+                        onDragOver={handleDragOverItem('optionGroupsDesktop', idx)}
+                        onDragLeave={clearDragIndicator}
+                        onDragEnd={clearDragIndicator}
+                        onDrop={() => handleOptionGroupDrop(draggedOptionGroupIdx, idx)}
                         onClick={() => setSelectedOptionGroupIdForModal(group.id)}
                         style={{
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left',
@@ -2273,10 +2360,11 @@ export default function App() {
                           background: selectedOptionGroupIdForModal === group.id ? '#eff6ff' : 'transparent',
                           color: selectedOptionGroupIdForModal === group.id ? '#1d4ed8' : '#334155',
                           fontWeight: selectedOptionGroupIdForModal === group.id ? 'bold' : 'normal',
-                          fontSize: '13px'
+                          fontSize: '13px',
+                          ...getDropLineStyle('optionGroupsDesktop', idx)
                         }}
                       >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.name}</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>☰ {group.name}</span>
                         <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0, marginLeft: '6px' }}>{(group.option_items || []).length}개</span>
                       </button>
                     ))}
