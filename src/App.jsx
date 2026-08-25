@@ -62,6 +62,13 @@ export default function App() {
   const [filterOrderType, setFilterOrderType] = useState('전체');
   const [filterPaymentType, setFilterPaymentType] = useState('전체');
 
+  // ===== 매출정산 - 일단위 / 월단위 / 연단위 =====
+  const [salesViewMode, setSalesViewMode] = useState('daily'); // 'daily' | 'monthly' | 'yearly'
+  const [selectedMonth, setSelectedMonth] = useState(''); // 'YYYY-MM' - 데이터가 존재하는 월 중에서만 선택
+  const [selectedYear, setSelectedYear] = useState('');   // 'YYYY' - 데이터가 존재하는 연도 중에서만 선택
+  const [rangeOrders, setRangeOrders] = useState([]);      // 월단위/연단위 조회 시 그 기간에 해당하는 주문 전체
+  const [drillDownDate, setDrillDownDate] = useState(null); // 월단위 추이 차트에서 클릭한 특정 일자 (조회 전용)
+
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -109,6 +116,9 @@ export default function App() {
   const [newGroupRequired, setNewGroupRequired] = useState(false);
   const [newGroupMultiple, setNewGroupMultiple] = useState(false);
   const [newOptionDraft, setNewOptionDraft] = useState({}); // { [group_id]: { name, price } }
+  // PC(넓은 화면)에서 옵션 관리 모달을 좌(그룹 목록)/우(선택한 그룹 상세)로 나눠 보여줄 때, 현재 선택된 그룹
+  const [selectedOptionGroupIdForModal, setSelectedOptionGroupIdForModal] = useState(null);
+  const [isDesktopAddGroupOpen, setIsDesktopAddGroupOpen] = useState(false); // PC 레이아웃에서 "새 옵션 그룹 추가" 폼 펼침 여부
 
   // 주문 입력(POS) 화면 - 옵션이 있는 메뉴를 클릭했을 때 메뉴 선택 화면에서 바로 펼쳐지는 옵션 선택 영역
   // { menuId, selections: { [group_id]: optionId | optionId[] } }
@@ -126,6 +136,30 @@ export default function App() {
       fetchDailyOrders(selectedDate);
     }
   }, [activeTab, selectedDate]);
+
+  // 옵션 관리 모달(PC 좌/우 레이아웃) - 목록이 바뀌었는데 선택된 그룹이 없거나 삭제되었으면 첫 번째 그룹을 자동 선택
+  useEffect(() => {
+    if (optionGroups.length === 0) {
+      setSelectedOptionGroupIdForModal(null);
+      return;
+    }
+    if (!optionGroups.some(g => g.id === selectedOptionGroupIdForModal)) {
+      setSelectedOptionGroupIdForModal(optionGroups[0].id);
+    }
+  }, [optionGroups]);
+
+  // 월단위/연단위 조회 - 선택된 월/연도가 바뀌면 그 기간에 해당하는 주문을 전체 조회해온다.
+  useEffect(() => {
+    if (activeTab !== 'sales') return;
+    if (salesViewMode === 'monthly' && selectedMonth) {
+      const [y, m] = selectedMonth.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      fetchRangeOrders(`${selectedMonth}-01`, `${selectedMonth}-${String(lastDay).padStart(2, '0')}`);
+      setDrillDownDate(null);
+    } else if (salesViewMode === 'yearly' && selectedYear) {
+      fetchRangeOrders(`${selectedYear}-01-01`, `${selectedYear}-12-31`);
+    }
+  }, [activeTab, salesViewMode, selectedMonth, selectedYear]);
 
   useEffect(() => {
     if (selectedMgmtStore) {
@@ -253,7 +287,21 @@ export default function App() {
       if (res.data.length > 0 && !res.data.includes(selectedDate)) {
         setSelectedDate(res.data[0]);
       }
+
+      // 월단위/연단위 선택 옵션은 "실제 주문이 존재하는 월/연도"만 보여준다.
+      // 기본값은 이번 달/올해가 있으면 그것으로, 없으면 데이터가 있는 것 중 가장 최근 것으로.
+      const months = [...new Set(res.data.map(d => d.slice(0, 7)))];
+      const currentMonth = getTodayStr().slice(0, 7);
+      setSelectedMonth(prev => (prev && months.includes(prev)) ? prev : (months.includes(currentMonth) ? currentMonth : (months[0] || '')));
+
+      const years = [...new Set(res.data.map(d => d.slice(0, 4)))];
+      const currentYear = getTodayStr().slice(0, 4);
+      setSelectedYear(prev => (prev && years.includes(prev)) ? prev : (years.includes(currentYear) ? currentYear : (years[0] || '')));
     });
+  };
+
+  const fetchRangeOrders = (start, end) => {
+    axios.get(`${API_BASE_URL}/sales/range?start=${start}&end=${end}`).then(res => setRangeOrders(res.data));
   };
 
   const fetchDailyOrders = (date) => {
@@ -811,12 +859,292 @@ export default function App() {
     return optNames.length > 0 ? `${baseName} (${optNames.join(', ')})` : baseName;
   };
 
-  const filteredDailyOrders = dailyOrders.filter(order => {
+  // 가게구분/배달구분/결제수단 필터 - 일단위/월단위/연단위 모두 동일한 조건으로 사용한다.
+  const orderMatchesSalesFilter = (order) => {
     const storeMatch = filterStore === '전체' || order.order_items.some(i => i.menus?.store_tag === filterStore);
     const typeMatch = filterOrderType === '전체' || order.order_types?.name === filterOrderType;
     const paymentMatch = filterPaymentType === '전체' || order.payment_type === filterPaymentType;
     return storeMatch && typeMatch && paymentMatch;
-  });
+  };
+
+  const filteredDailyOrders = dailyOrders.filter(orderMatchesSalesFilter);
+  const filteredRangeOrders = rangeOrders.filter(orderMatchesSalesFilter);
+
+  // 조회 월/연도 선택지 - 실제 주문이 존재하는 월/연도만, 최근 순으로 보여준다.
+  const availableMonths = [...new Set(dateList.map(d => d.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
+  const availableYears = [...new Set(dateList.map(d => d.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+
+  // 월단위: 선택된 월의 일자별(1일~말일) 건수/금액 집계 - 주문이 없는 날짜도 0으로 채워서 추이를 이어 보여준다.
+  const monthlyChartData = (() => {
+    if (salesViewMode !== 'monthly' || !selectedMonth) return [];
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const buckets = {};
+    filteredRangeOrders.forEach(o => {
+      const day = (o.created_at || '').split('T')[0];
+      if (!buckets[day]) buckets[day] = { count: 0, amount: 0 };
+      buckets[day].count += 1;
+      buckets[day].amount += o.total_amount || 0;
+    });
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const dateStr = `${selectedMonth}-${String(i + 1).padStart(2, '0')}`;
+      const bucket = buckets[dateStr] || { count: 0, amount: 0 };
+      return { key: dateStr, label: String(i + 1), ...bucket };
+    });
+  })();
+
+  // 연단위: 선택된 연도의 월별(1월~12월) 건수/금액 집계
+  const yearlyChartData = (() => {
+    if (salesViewMode !== 'yearly' || !selectedYear) return [];
+    const buckets = {};
+    filteredRangeOrders.forEach(o => {
+      const month = (o.created_at || '').slice(0, 7);
+      if (!buckets[month]) buckets[month] = { count: 0, amount: 0 };
+      buckets[month].count += 1;
+      buckets[month].amount += o.total_amount || 0;
+    });
+    return Array.from({ length: 12 }, (_, i) => {
+      const monthStr = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
+      const bucket = buckets[monthStr] || { count: 0, amount: 0 };
+      return { key: monthStr, label: `${i + 1}월`, ...bucket };
+    });
+  })();
+
+  // 월단위 화면에서 추이 차트의 특정 일자를 클릭했을 때 그 날의 주문만 골라낸다 (조회 전용, 수정/삭제 없음).
+  const drillDownOrders = drillDownDate
+    ? filteredRangeOrders.filter(o => (o.created_at || '').split('T')[0] === drillDownDate)
+    : [];
+
+  // 가게구분/배달구분/결제수단 필터 UI - 일단위/월단위/연단위 화면에서 공통으로 사용한다.
+  const renderSalesFilterRow = () => (
+    <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
+        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          {storeTags.map(st => (
+            <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{st.name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
+        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          {orderTypes.map(ot => (
+            <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
+        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {['전체', '카드', '현금'].map(pt => (
+            <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155', fontWeight: 'bold' }}>{pt}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // 총 주문건수 / 총 매출금액 카드 - 일단위/월단위/연단위 공통
+  const renderSalesTotalCards = (orders) => (
+    <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+      <div style={{ flex: 1, background: '#eff6ff', padding: '12px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+        <div style={{ fontSize: '12px', color: '#1e40af' }}>총 주문 건수</div>
+        <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e3a8a' }}>{orders.length} 건</div>
+      </div>
+      <div style={{ flex: 1, background: '#ecfdf5', padding: '12px', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
+        <div style={{ fontSize: '12px', color: '#065f46' }}>총 매출 금액</div>
+        <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#064e3b' }}>{orders.reduce((s, o) => s + o.total_amount, 0).toLocaleString()} 원</div>
+      </div>
+    </div>
+  );
+
+  // 월단위/연단위 추이 차트 - 외부 차트 라이브러리 없이 막대 2개(금액/건수)로 표현.
+  // clickable=true(월단위)면 막대를 눌러 그 날짜의 주문 목록을 아래에서 조회할 수 있다.
+  const renderTrendChart = (data, { clickable = false, selectedKey = null, onSelect = null } = {}) => {
+    const maxAmount = Math.max(1, ...data.map(d => d.amount));
+    const maxCount = Math.max(1, ...data.map(d => d.count));
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '150px', overflowX: 'auto', padding: '8px 4px', borderBottom: '2px solid #e2e8f0' }}>
+          {data.map(d => {
+            const isSelected = clickable && selectedKey === d.key;
+            return (
+              <div
+                key={d.key}
+                onClick={clickable ? () => onSelect(d.key) : undefined}
+                title={`${d.label}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minWidth: '24px', flexShrink: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '110px' }}>
+                  <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0' }} />
+                  <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0' }} />
+                </div>
+                <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal' }}>{d.label}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: '14px', marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
+          <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#93c5fd', marginRight: '4px', borderRadius: '2px' }} />금액</span>
+          <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#6ee7b7', marginRight: '4px', borderRadius: '2px' }} />건수</span>
+          {clickable && <span style={{ color: '#94a3b8' }}>막대를 누르면 그 날짜의 주문 목록을 볼 수 있습니다.</span>}
+        </div>
+      </div>
+    );
+  };
+
+  // 월단위 화면의 일자별 드릴다운 - 수정/삭제 없이 조회만 가능한 간단한 목록.
+  const renderReadOnlyOrderList = (orders) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {orders.length === 0 && (
+        <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '14px' }}>해당 일자의 주문 내역이 없습니다.</div>
+      )}
+      {orders.map(order => {
+        const dateObj = new Date(order.created_at);
+        const formattedTime = !isNaN(dateObj.getTime())
+          ? `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
+          : order.created_at;
+        return (
+          <div key={order.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>{formattedTime}</span>
+              <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+              <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+            </div>
+            <div style={{ fontSize: '12px', flex: 1, minWidth: isMobile ? '100%' : 0, wordBreak: 'break-all' }}>
+              {order.order_items?.map(i => `${formatOrderItemLabel(i)}(${i.quantity})`).join(', ')}
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#2563eb', flexShrink: 0 }}>{order.total_amount.toLocaleString()}원</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // 옵션 그룹 하나의 상세 내용(그룹명 헤더 + 옵션 목록 + 옵션 추가 폼).
+  // 모바일에서는 그룹마다 이 내용을 카드로 쌓아 보여주고, PC에서는 좌측에서 고른 그룹 하나만 우측에 보여준다.
+  const renderOptionGroupDetail = (group) => (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px' }}>
+        {editingOptionGroupId === group.id ? (
+          <>
+            <input
+              autoFocus
+              value={editingOptionGroupName}
+              onChange={e => setEditingOptionGroupName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionGroup(); if (e.key === 'Escape') cancelEditOptionGroup(); }}
+              style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+            />
+            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+              <button onClick={handleRenameOptionGroup} style={{ padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>저장</button>
+              <button onClick={cancelEditOptionGroup} style={{ padding: '4px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>취소</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{group.name}</span>
+              <span style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: group.is_required ? '#fee2e2' : '#e0e7ff', color: group.is_required ? '#b91c1c' : '#3730a3', fontWeight: 'bold' }}>
+                {group.is_required ? '필수' : '선택'}{group.allow_multiple ? ' · 중복가능' : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+              <button onClick={() => startEditOptionGroup(group)} style={{ padding: '4px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>수정</button>
+              <button onClick={() => handleDeleteOptionGroup(group.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>그룹삭제</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+        {(group.option_items || []).map(opt => (
+          <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px', gap: '8px' }}>
+            {editingOptionItemId === opt.id ? (
+              <>
+                <input
+                  autoFocus
+                  value={editingOptionItemDraft.name}
+                  onChange={e => setEditingOptionItemDraft(prev => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionItem(); if (e.key === 'Escape') cancelEditOptionItem(); }}
+                  style={{ flex: 2, padding: '5px 7px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+                />
+                <input
+                  type="number"
+                  value={editingOptionItemDraft.price}
+                  onChange={e => setEditingOptionItemDraft(prev => ({ ...prev, price: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionItem(); if (e.key === 'Escape') cancelEditOptionItem(); }}
+                  style={{ flex: 1, padding: '5px 7px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
+                />
+                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  <button onClick={handleRenameOptionItem} style={{ padding: '3px 6px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>저장</button>
+                  <button onClick={cancelEditOptionItem} style={{ padding: '3px 6px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>취소</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
+                    {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
+                  </span>
+                  <button onClick={() => startEditOptionItem(opt)} style={{ padding: '3px 6px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>수정</button>
+                  <button onClick={() => handleDeleteOption(opt.id)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>X</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {(group.option_items || []).length === 0 && (
+          <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>옵션이 없습니다.</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <input
+          placeholder="예: 곱빼기"
+          value={(newOptionDraft[group.id] || {}).name || ''}
+          onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), name: e.target.value } }))}
+          style={{ flex: 2, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+        />
+        <input
+          type="number"
+          placeholder="추가금액"
+          value={(newOptionDraft[group.id] || {}).price || ''}
+          onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), price: e.target.value } }))}
+          style={{ flex: 1, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+        />
+        <button onClick={() => handleAddOption(group.id)} style={{ padding: '7px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>추가</button>
+      </div>
+    </>
+  );
+
+  // "새 옵션 그룹 추가" 폼 - 모바일(항상 하단 노출)과 PC(버튼을 눌러야 펼쳐짐)에서 공용으로 사용한다.
+  const renderAddOptionGroupForm = () => (
+    <>
+      <input
+        placeholder="예: 곱빼기 선택, 면 종류 선택"
+        value={newGroupName}
+        onChange={e => setNewGroupName(e.target.value)}
+        style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px', marginBottom: '8px' }}
+      />
+      <div style={{ display: 'flex', gap: '14px', marginBottom: '10px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#334155', cursor: 'pointer' }}>
+          <input type="checkbox" checked={newGroupRequired} onChange={e => setNewGroupRequired(e.target.checked)} />
+          필수 선택
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#334155', cursor: 'pointer' }}>
+          <input type="checkbox" checked={newGroupMultiple} onChange={e => setNewGroupMultiple(e.target.checked)} />
+          중복 선택 허용
+        </label>
+      </div>
+      <button onClick={() => { handleAddOptionGroup(); setIsDesktopAddGroupOpen(false); }} style={{ width: '100%', padding: '10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>옵션 그룹 추가</button>
+    </>
+  );
 
   return (
     <div style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden', margin: '0 auto', padding: '12px', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#f4f6f8', minHeight: '100vh', color: '#333', boxSizing: 'border-box' }}>
@@ -831,7 +1159,7 @@ export default function App() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', backgroundColor: '#fff', padding: '12px 16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flexDirection: isMobile ? 'column' : 'row', gap: '10px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', justifyContent: 'center' }}>
           <button onClick={() => setActiveTab('pos')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'pos' ? '#2563eb' : '#f1f5f9', color: activeTab === 'pos' ? '#fff' : '#64748b', fontSize: '14px' }}>주문 입력</button>
-          <button onClick={() => setActiveTab('sales')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b', fontSize: '14px' }}>일매출 정산</button>
+          <button onClick={() => setActiveTab('sales')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'sales' ? '#2563eb' : '#f1f5f9', color: activeTab === 'sales' ? '#fff' : '#64748b', fontSize: '14px' }}>매출정산</button>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', justifyContent: 'center' }}>
           <button onClick={() => setActiveTab('menuMgmt')} style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: activeTab === 'menuMgmt' ? '#10b981' : '#f1f5f9', color: activeTab === 'menuMgmt' ? '#fff' : '#64748b', fontSize: '14px' }}>⚙️ 메뉴 관리</button>
@@ -1046,85 +1374,60 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. 일매출 정산 */}
+      {/* 2. 매출정산 */}
       {activeTab === 'sales' && (
         <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', boxSizing: 'border-box', width: '100%' }}>
-          <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>일자 목록</h3>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <select
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  backgroundColor: '#f8fafc',
-                  color: '#1e293b',
-                  boxSizing: 'border-box',
-                  cursor: 'pointer'
-                }}
+
+          {/* 일단위 / 월단위 / 연단위 서브탭 */}
+          <div style={{ width: '100%', background: '#fff', padding: '8px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', display: 'flex', gap: '8px' }}>
+            {[{ key: 'daily', label: '일단위' }, { key: 'monthly', label: '월단위' }, { key: 'yearly', label: '연단위' }].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setSalesViewMode(tab.key)}
+                style={{ flex: 1, padding: '9px 0', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: salesViewMode === tab.key ? '#0f172a' : '#f1f5f9', color: salesViewMode === tab.key ? '#fff' : '#64748b', fontSize: '13px' }}
               >
-                {dateList.length === 0 && <option value="">등록된 매출 날짜가 없습니다</option>}
-                {dateList.map(date => (
-                  <option key={date} value={date}>
-                    {date} {date === getTodayStr() ? '(오늘)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
-
-            {/* [개선 1 반영] 필터 영역 가로 배열 (Flexbox 활용, 화면이 넓으면 한 줄로 자연스럽게 배치) */}
-            <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
-                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                  <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
-                  {storeTags.map(st => (
-                    <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{st.name}</button>
-                  ))}
+          {/* ===== 일단위 (기존 화면 그대로) ===== */}
+          {salesViewMode === 'daily' && (
+            <>
+              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>일자 목록</h3>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      backgroundColor: '#f8fafc',
+                      color: '#1e293b',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {dateList.length === 0 && <option value="">등록된 매출 날짜가 없습니다</option>}
+                    {dateList.map(date => (
+                      <option key={date} value={date}>
+                        {date} {date === getTodayStr() ? '(오늘)' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
-                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                  <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
-                  {orderTypes.map(ot => (
-                    <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
-                  ))}
-                </div>
-              </div>
+              <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedDate} 매출 상세</h2>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
-                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                  {['전체', '카드', '현금'].map(pt => (
-                    <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155', fontWeight: 'bold' }}>{pt}</button>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-              <div style={{ flex: 1, background: '#eff6ff', padding: '12px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                <div style={{ fontSize: '12px', color: '#1e40af' }}>총 주문 건수</div>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e3a8a' }}>{filteredDailyOrders.length} 건</div>
-              </div>
-              <div style={{ flex: 1, background: '#ecfdf5', padding: '12px', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
-                <div style={{ fontSize: '12px', color: '#065f46' }}>총 매출 금액</div>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#064e3b' }}>{filteredDailyOrders.reduce((s, o) => s + o.total_amount, 0).toLocaleString()} 원</div>
-              </div>
-            </div>
+                {renderSalesFilterRow()}
+                {renderSalesTotalCards(filteredDailyOrders)}
 
             {/* [개선 3 반영] 테이블 가로스크롤 방지 및 모바일/좁은 화면 대응 2열 카드 배열 (isMobile 여부에 따라 동적 렌더링) */}
             {isMobile ? (
@@ -1243,7 +1546,79 @@ export default function App() {
                 </table>
               </div>
             )}
-          </div>
+              </div>
+            </>
+          )}
+
+          {/* ===== 월단위 ===== */}
+          {salesViewMode === 'monthly' && (
+            <>
+              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>조회 월</h3>
+                <select
+                  value={selectedMonth}
+                  onChange={e => { setSelectedMonth(e.target.value); setDrillDownDate(null); }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
+                >
+                  {availableMonths.length === 0 && <option value="">등록된 매출 월이 없습니다</option>}
+                  {availableMonths.map(m => (
+                    <option key={m} value={m}>{m} {m === getTodayStr().slice(0, 7) ? '(이번 달)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedMonth || '월 미선택'} 매출 상세</h2>
+
+                {renderSalesFilterRow()}
+                {renderSalesTotalCards(filteredRangeOrders)}
+
+                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>일자별 추이</h3>
+                {renderTrendChart(monthlyChartData, {
+                  clickable: true,
+                  selectedKey: drillDownDate,
+                  onSelect: (key) => setDrillDownDate(prev => (prev === key ? null : key))
+                })}
+
+                {drillDownDate && (
+                  <div style={{ marginTop: '18px', borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
+                    <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '10px' }}>{drillDownDate} 주문 목록 <span style={{ fontWeight: 'normal', fontSize: '11px', color: '#94a3b8' }}>(조회 전용 - 수정/삭제는 일단위 화면에서 해주세요)</span></h3>
+                    {renderReadOnlyOrderList(drillDownOrders)}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ===== 연단위 ===== */}
+          {salesViewMode === 'yearly' && (
+            <>
+              <div style={{ width: '100%', background: '#fff', padding: '14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>조회 연도</h3>
+                <select
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
+                >
+                  {availableYears.length === 0 && <option value="">등록된 매출 연도가 없습니다</option>}
+                  {availableYears.map(y => (
+                    <option key={y} value={y}>{y}년 {y === getTodayStr().slice(0, 4) ? '(올해)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedYear ? `${selectedYear}년` : '연도 미선택'} 매출 상세</h2>
+
+                {renderSalesFilterRow()}
+                {renderSalesTotalCards(filteredRangeOrders)}
+
+                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>월별 추이</h3>
+                {renderTrendChart(yearlyChartData)}
+              </div>
+            </>
+          )}
+
         </div>
       )}
 
@@ -1545,7 +1920,7 @@ export default function App() {
       {/* 부가옵션 관리 모달 (메뉴 관리 탭 - "옵션 관리" 버튼, 가게 하위 공통 리소스) */}
       {isOptionGroupModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '460px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: isMobile ? '460px' : '760px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
             <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>🧩 부가옵션 관리</h3>
             <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
               현재 선택된 가게: <strong style={{ color: '#2563eb' }}>{selectedMgmtStore}</strong> · 여기서 만든 옵션 그룹은 메뉴 등록/수정 시 선택해서 붙일 수 있습니다.
@@ -1558,126 +1933,73 @@ export default function App() {
               </div>
             )}
 
-            {/* 옵션 그룹 수가 많아져도 아래 "새 옵션 그룹 추가" 영역과 닫기 버튼은 항상 보이도록, 목록만 정해진 높이 안에서 스크롤되게 한다 */}
-            <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '2px' }}>
-              {optionGroups.map(group => (
-                <div key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px' }}>
-                    {editingOptionGroupId === group.id ? (
-                      <>
-                        <input
-                          autoFocus
-                          value={editingOptionGroupName}
-                          onChange={e => setEditingOptionGroupName(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionGroup(); if (e.key === 'Escape') cancelEditOptionGroup(); }}
-                          style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
-                        />
-                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                          <button onClick={handleRenameOptionGroup} style={{ padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>저장</button>
-                          <button onClick={cancelEditOptionGroup} style={{ padding: '4px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>취소</button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div>
-                          <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{group.name}</span>
-                          <span style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: group.is_required ? '#fee2e2' : '#e0e7ff', color: group.is_required ? '#b91c1c' : '#3730a3', fontWeight: 'bold' }}>
-                            {group.is_required ? '필수' : '선택'}{group.allow_multiple ? ' · 중복가능' : ''}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                          <button onClick={() => startEditOptionGroup(group)} style={{ padding: '4px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>수정</button>
-                          <button onClick={() => handleDeleteOptionGroup(group.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>그룹삭제</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+            {isMobile ? (
+              <>
+                {/* 모바일: 기존처럼 그룹마다 카드를 세로로 쌓고, 목록만 스크롤되게 해서 입력창/닫기 버튼은 항상 보이게 한다 */}
+                <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '2px' }}>
+                  {optionGroups.map(group => (
+                    <div key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: '#f8fafc' }}>
+                      {renderOptionGroupDetail(group)}
+                    </div>
+                  ))}
+                </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
-                    {(group.option_items || []).map(opt => (
-                      <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px', gap: '8px' }}>
-                        {editingOptionItemId === opt.id ? (
-                          <>
-                            <input
-                              autoFocus
-                              value={editingOptionItemDraft.name}
-                              onChange={e => setEditingOptionItemDraft(prev => ({ ...prev, name: e.target.value }))}
-                              onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionItem(); if (e.key === 'Escape') cancelEditOptionItem(); }}
-                              style={{ flex: 2, padding: '5px 7px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
-                            />
-                            <input
-                              type="number"
-                              value={editingOptionItemDraft.price}
-                              onChange={e => setEditingOptionItemDraft(prev => ({ ...prev, price: e.target.value }))}
-                              onKeyDown={e => { if (e.key === 'Enter') handleRenameOptionItem(); if (e.key === 'Escape') cancelEditOptionItem(); }}
-                              style={{ flex: 1, padding: '5px 7px', borderRadius: '4px', border: '1px solid #2563eb', fontSize: '12px' }}
-                            />
-                            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                              <button onClick={handleRenameOptionItem} style={{ padding: '3px 6px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>저장</button>
-                              <button onClick={cancelEditOptionItem} style={{ padding: '3px 6px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>취소</button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{opt.name}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontSize: '12px', color: opt.extra_price > 0 ? '#2563eb' : '#94a3b8' }}>
-                                {opt.extra_price > 0 ? `+${opt.extra_price.toLocaleString()}원` : '추가금액 없음'}
-                              </span>
-                              <button onClick={() => startEditOptionItem(opt)} style={{ padding: '3px 6px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>수정</button>
-                              <button onClick={() => handleDeleteOption(opt.id)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>X</button>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '12px', marginTop: '4px' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '8px' }}>+ 새 옵션 그룹 추가</p>
+                  {renderAddOptionGroupForm()}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* PC: 최상단에 그룹 추가 버튼(누르면 폼이 펼쳐짐), 하단은 좌(그룹명 목록)/우(선택한 그룹 상세)로 분할 */}
+                <div style={{ marginBottom: '14px' }}>
+                  <button
+                    onClick={() => setIsDesktopAddGroupOpen(v => !v)}
+                    style={{ padding: '9px 16px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
+                  >
+                    {isDesktopAddGroupOpen ? '− 새 옵션 그룹 추가 닫기' : '+ 새 옵션 그룹 추가'}
+                  </button>
+                  {isDesktopAddGroupOpen && (
+                    <div style={{ marginTop: '10px', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      {renderAddOptionGroupForm()}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '14px', height: '440px' }}>
+                  <div style={{ width: '220px', flexShrink: 0, overflowY: 'auto', borderRight: '1px solid #f1f5f9', paddingRight: '10px' }}>
+                    {optionGroups.map(group => (
+                      <button
+                        key={group.id}
+                        onClick={() => setSelectedOptionGroupIdForModal(group.id)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left',
+                          padding: '10px 12px', marginBottom: '6px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                          background: selectedOptionGroupIdForModal === group.id ? '#eff6ff' : 'transparent',
+                          color: selectedOptionGroupIdForModal === group.id ? '#1d4ed8' : '#334155',
+                          fontWeight: selectedOptionGroupIdForModal === group.id ? 'bold' : 'normal',
+                          fontSize: '13px'
+                        }}
+                      >
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.name}</span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0, marginLeft: '6px' }}>{(group.option_items || []).length}개</span>
+                      </button>
                     ))}
-                    {(group.option_items || []).length === 0 && (
-                      <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>옵션이 없습니다.</div>
-                    )}
                   </div>
 
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <input
-                      placeholder="예: 곱빼기"
-                      value={(newOptionDraft[group.id] || {}).name || ''}
-                      onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), name: e.target.value } }))}
-                      style={{ flex: 2, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                    />
-                    <input
-                      type="number"
-                      placeholder="추가금액"
-                      value={(newOptionDraft[group.id] || {}).price || ''}
-                      onChange={e => setNewOptionDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), price: e.target.value } }))}
-                      style={{ flex: 1, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                    />
-                    <button onClick={() => handleAddOption(group.id)} style={{ padding: '7px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>추가</button>
+                  <div style={{ flex: 1, overflowY: 'auto', paddingLeft: '2px' }}>
+                    {(() => {
+                      const selectedGroup = optionGroups.find(g => g.id === selectedOptionGroupIdForModal);
+                      return selectedGroup
+                        ? renderOptionGroupDetail(selectedGroup)
+                        : <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '24px' }}>왼쪽에서 옵션 그룹을 선택해주세요.</div>;
+                    })()}
                   </div>
                 </div>
-              ))}
-            </div>
+              </>
+            )}
 
-            <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '12px', marginTop: '4px' }}>
-              <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '8px' }}>+ 새 옵션 그룹 추가</p>
-              <input
-                placeholder="예: 곱빼기 선택, 면 종류 선택"
-                value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-                style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px', marginBottom: '8px' }}
-              />
-              <div style={{ display: 'flex', gap: '14px', marginBottom: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#334155', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={newGroupRequired} onChange={e => setNewGroupRequired(e.target.checked)} />
-                  필수 선택
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#334155', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={newGroupMultiple} onChange={e => setNewGroupMultiple(e.target.checked)} />
-                  중복 선택 허용
-                </label>
-              </div>
-              <button onClick={handleAddOptionGroup} style={{ width: '100%', padding: '10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>옵션 그룹 추가</button>
-            </div>
-
-            <button onClick={() => { setIsOptionGroupModalOpen(false); cancelEditOptionGroup(); cancelEditOptionItem(); }} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', marginTop: '14px' }}>닫기</button>
+            <button onClick={() => { setIsOptionGroupModalOpen(false); cancelEditOptionGroup(); cancelEditOptionItem(); setIsDesktopAddGroupOpen(false); }} style={{ width: '100%', padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', marginTop: '14px' }}>닫기</button>
           </div>
         </div>
       )}
