@@ -68,7 +68,6 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState('');   // 'YYYY' - 데이터가 존재하는 연도 중에서만 선택
   const [rangeOrders, setRangeOrders] = useState([]);      // 월단위/연단위 조회 시 그 기간에 해당하는 주문 전체
   const [drillDownDate, setDrillDownDate] = useState(null); // 월단위 추이 차트에서 클릭한 특정 일자 (조회 전용)
-  const [drillDownMonth, setDrillDownMonth] = useState(null); // 연단위 추이 차트에서 클릭한 특정 월 (총 건수/금액만 표시)
 
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
@@ -159,7 +158,6 @@ export default function App() {
       setDrillDownDate(null);
     } else if (salesViewMode === 'yearly' && selectedYear) {
       fetchRangeOrders(`${selectedYear}-01-01`, `${selectedYear}-12-31`);
-      setDrillDownMonth(null);
     }
   }, [activeTab, salesViewMode, selectedMonth, selectedYear]);
 
@@ -861,6 +859,12 @@ export default function App() {
     return optNames.length > 0 ? `${baseName} (${optNames.join(', ')})` : baseName;
   };
 
+  // 한 주문에 담긴 메뉴들이 속한 가게구분을 뽑아낸다 (여러 가게 메뉴가 한 주문에 섞여 있으면 모두 표시).
+  const getOrderStoreTags = (order) => {
+    const tags = [...new Set((order.order_items || []).map(i => i.menus?.store_tag).filter(Boolean))];
+    return tags.length > 0 ? tags.join(', ') : '-';
+  };
+
   // 가게구분/배달구분/결제수단 필터 - 일단위/월단위/연단위 모두 동일한 조건으로 사용한다.
   const orderMatchesSalesFilter = (order) => {
     const storeMatch = filterStore === '전체' || order.order_items.some(i => i.menus?.store_tag === filterStore);
@@ -1002,6 +1006,7 @@ export default function App() {
   };
 
   // 월단위 화면의 일자별 드릴다운 - 수정/삭제 없이 조회만 가능한 간단한 목록.
+  // 모바일에서는 한 줄에 다 몰아넣지 않고 세로로 쌓는 카드 형태로 보여준다 (찌그러짐 방지).
   const renderReadOnlyOrderList = (orders) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {orders.length === 0 && (
@@ -1012,16 +1017,32 @@ export default function App() {
         const formattedTime = !isNaN(dateObj.getTime())
           ? `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`
           : order.created_at;
-        return (
-          <div key={order.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+        const storeTagsLabel = getOrderStoreTags(order);
+        const itemsLabel = order.order_items?.map(i => `${formatOrderItemLabel(i)}(${i.quantity})`).join(', ');
+        const badges = (
+          <>
+            <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{storeTagsLabel}</span>
+            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+            <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+          </>
+        );
+
+        return isMobile ? (
+          <div key={order.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>{formattedTime}</span>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>{badges}</div>
+            </div>
+            <div style={{ fontSize: '12px', marginBottom: '6px', wordBreak: 'break-all' }}>{itemsLabel}</div>
+            <div style={{ textAlign: 'right', fontSize: '13px', fontWeight: 'bold', color: '#2563eb' }}>{order.total_amount.toLocaleString()}원</div>
+          </div>
+        ) : (
+          <div key={order.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>{formattedTime}</span>
-              <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
-              <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+              {badges}
             </div>
-            <div style={{ fontSize: '12px', flex: 1, minWidth: isMobile ? '100%' : 0, wordBreak: 'break-all' }}>
-              {order.order_items?.map(i => `${formatOrderItemLabel(i)}(${i.quantity})`).join(', ')}
-            </div>
+            <div style={{ fontSize: '12px', flex: 1, minWidth: 0, wordBreak: 'break-all' }}>{itemsLabel}</div>
             <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#2563eb', flexShrink: 0 }}>{order.total_amount.toLocaleString()}원</div>
           </div>
         );
@@ -1446,7 +1467,8 @@ export default function App() {
                     <div key={order.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', color: '#64748b' }}>
                         <span>{formattedTime}</span>
-                        <div style={{ display: 'flex', gap: '4px' }}>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{getOrderStoreTags(order)}</span>
                           <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
                           <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
                         </div>
@@ -1479,11 +1501,12 @@ export default function App() {
               </div>
             ) : (
               <div style={{ overflowX: 'auto', width: '100%' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '600px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '680px' }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', height: '40px', color: '#64748b' }}>
                       <th style={{ width: '30px' }}></th>
                       <th style={{ width: '60px' }}>시간</th>
+                      <th style={{ width: '80px' }}>가게구분</th>
                       <th style={{ width: '75px' }}>결제</th>
                       <th style={{ width: '85px' }}>구분</th>
                       <th style={{ textAlign: 'left', paddingLeft: '10px', minWidth: '180px' }}>상세 내역</th>
@@ -1512,6 +1535,11 @@ export default function App() {
                         >
                           <td style={{ color: '#94a3b8' }}>☰</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
+                          <td>
+                            <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                              {getOrderStoreTags(order)}
+                            </span>
+                          </td>
                           <td>
                             <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {order.payment_type || '카드'}
@@ -1587,10 +1615,11 @@ export default function App() {
                   const dayBucket = monthlyChartData.find(d => d.key === drillDownDate);
                   return (
                     <div style={{ marginTop: '18px', borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
-                      <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '6px' }}>{drillDownDate} 주문 목록 <span style={{ fontWeight: 'normal', fontSize: '11px', color: '#94a3b8' }}>(조회 전용 - 수정/삭제는 일단위 화면에서 해주세요)</span></h3>
+                      <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '8px' }}>{drillDownDate} 주문 목록</h3>
                       {dayBucket && (
-                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
-                          해당 일자 총 <strong style={{ color: '#1e3a8a' }}>{dayBucket.count}건</strong> · <strong style={{ color: '#064e3b' }}>{dayBucket.amount.toLocaleString()}원</strong>
+                        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>총 {dayBucket.count}건</span>
+                          <span style={{ background: '#dcfce7', color: '#065f46', padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dayBucket.amount.toLocaleString()}원</span>
                         </div>
                       )}
                       {renderReadOnlyOrderList(drillDownOrders)}
@@ -1608,7 +1637,7 @@ export default function App() {
                 <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>조회 연도</h3>
                 <select
                   value={selectedYear}
-                  onChange={e => { setSelectedYear(e.target.value); setDrillDownMonth(null); }}
+                  onChange={e => setSelectedYear(e.target.value)}
                   style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
                 >
                   {availableYears.length === 0 && <option value="">등록된 매출 연도가 없습니다</option>}
@@ -1624,25 +1653,23 @@ export default function App() {
                 {renderSalesFilterRow()}
                 {renderSalesTotalCards(filteredRangeOrders)}
 
-                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>월별 추이 <span style={{ fontWeight: 'normal', fontSize: '11px', color: '#94a3b8' }}>(막대를 누르면 그 달의 총 건수/금액을 볼 수 있습니다)</span></h3>
-                {renderTrendChart(yearlyChartData, {
-                  clickable: true,
-                  selectedKey: drillDownMonth,
-                  onSelect: (key) => setDrillDownMonth(prev => (prev === key ? null : key))
-                })}
+                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>월별 추이</h3>
+                {renderTrendChart(yearlyChartData)}
 
-                {drillDownMonth && (() => {
-                  const monthBucket = yearlyChartData.find(d => d.key === drillDownMonth);
-                  if (!monthBucket) return null;
-                  return (
-                    <div style={{ marginTop: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>{drillDownMonth}</span>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>
-                        총 <strong style={{ color: '#1e3a8a' }}>{monthBucket.count}건</strong> · <strong style={{ color: '#064e3b' }}>{monthBucket.amount.toLocaleString()}원</strong>
-                      </span>
-                    </div>
-                  );
-                })()}
+                <div style={{ marginTop: '18px', borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
+                  <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '10px' }}>월별 요약</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {yearlyChartData.map(m => (
+                      <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 12px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>{m.label}</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>{m.count}건</span>
+                          <span style={{ background: '#dcfce7', color: '#065f46', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>{m.amount.toLocaleString()}원</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}
