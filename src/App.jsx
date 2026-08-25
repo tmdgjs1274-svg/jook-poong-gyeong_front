@@ -68,6 +68,7 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState('');   // 'YYYY' - 데이터가 존재하는 연도 중에서만 선택
   const [rangeOrders, setRangeOrders] = useState([]);      // 월단위/연단위 조회 시 그 기간에 해당하는 주문 전체
   const [drillDownDate, setDrillDownDate] = useState(null); // 월단위 추이 차트에서 클릭한 특정 일자 (조회 전용)
+  const [drillDownMonth, setDrillDownMonth] = useState(null); // 연단위 추이 차트에서 클릭한 특정 월 (총 건수/금액만 표시)
 
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
@@ -158,6 +159,7 @@ export default function App() {
       setDrillDownDate(null);
     } else if (salesViewMode === 'yearly' && selectedYear) {
       fetchRangeOrders(`${selectedYear}-01-01`, `${selectedYear}-12-31`);
+      setDrillDownMonth(null);
     }
   }, [activeTab, salesViewMode, selectedMonth, selectedYear]);
 
@@ -970,7 +972,8 @@ export default function App() {
     const maxCount = Math.max(1, ...data.map(d => d.count));
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '150px', overflowX: 'auto', padding: '8px 4px', borderBottom: '2px solid #e2e8f0' }}>
+        {/* 항목마다 폭을 고정하지 않고 flex:1로 균등 분배해서, 항목 수가 적어도(예: 12개월) 차트가 왼쪽에 몰리지 않고 전체 너비를 채우게 한다 */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', height: '150px', padding: '8px 4px', borderBottom: '2px solid #e2e8f0', boxSizing: 'border-box' }}>
           {data.map(d => {
             const isSelected = clickable && selectedKey === d.key;
             return (
@@ -978,11 +981,11 @@ export default function App() {
                 key={d.key}
                 onClick={clickable ? () => onSelect(d.key) : undefined}
                 title={`${d.label}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minWidth: '24px', flexShrink: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, minWidth: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '110px' }}>
-                  <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0' }} />
-                  <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0' }} />
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px', width: '100%', height: '110px' }}>
+                  <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
+                  <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
                 </div>
                 <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal' }}>{d.label}</div>
               </div>
@@ -1580,12 +1583,20 @@ export default function App() {
                   onSelect: (key) => setDrillDownDate(prev => (prev === key ? null : key))
                 })}
 
-                {drillDownDate && (
-                  <div style={{ marginTop: '18px', borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
-                    <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '10px' }}>{drillDownDate} 주문 목록 <span style={{ fontWeight: 'normal', fontSize: '11px', color: '#94a3b8' }}>(조회 전용 - 수정/삭제는 일단위 화면에서 해주세요)</span></h3>
-                    {renderReadOnlyOrderList(drillDownOrders)}
-                  </div>
-                )}
+                {drillDownDate && (() => {
+                  const dayBucket = monthlyChartData.find(d => d.key === drillDownDate);
+                  return (
+                    <div style={{ marginTop: '18px', borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
+                      <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '6px' }}>{drillDownDate} 주문 목록 <span style={{ fontWeight: 'normal', fontSize: '11px', color: '#94a3b8' }}>(조회 전용 - 수정/삭제는 일단위 화면에서 해주세요)</span></h3>
+                      {dayBucket && (
+                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
+                          해당 일자 총 <strong style={{ color: '#1e3a8a' }}>{dayBucket.count}건</strong> · <strong style={{ color: '#064e3b' }}>{dayBucket.amount.toLocaleString()}원</strong>
+                        </div>
+                      )}
+                      {renderReadOnlyOrderList(drillDownOrders)}
+                    </div>
+                  );
+                })()}
               </div>
             </>
           )}
@@ -1597,7 +1608,7 @@ export default function App() {
                 <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '15px' }}>조회 연도</h3>
                 <select
                   value={selectedYear}
-                  onChange={e => setSelectedYear(e.target.value)}
+                  onChange={e => { setSelectedYear(e.target.value); setDrillDownMonth(null); }}
                   style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b', boxSizing: 'border-box', cursor: 'pointer' }}
                 >
                   {availableYears.length === 0 && <option value="">등록된 매출 연도가 없습니다</option>}
@@ -1613,8 +1624,25 @@ export default function App() {
                 {renderSalesFilterRow()}
                 {renderSalesTotalCards(filteredRangeOrders)}
 
-                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>월별 추이</h3>
-                {renderTrendChart(yearlyChartData)}
+                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>월별 추이 <span style={{ fontWeight: 'normal', fontSize: '11px', color: '#94a3b8' }}>(막대를 누르면 그 달의 총 건수/금액을 볼 수 있습니다)</span></h3>
+                {renderTrendChart(yearlyChartData, {
+                  clickable: true,
+                  selectedKey: drillDownMonth,
+                  onSelect: (key) => setDrillDownMonth(prev => (prev === key ? null : key))
+                })}
+
+                {drillDownMonth && (() => {
+                  const monthBucket = yearlyChartData.find(d => d.key === drillDownMonth);
+                  if (!monthBucket) return null;
+                  return (
+                    <div style={{ marginTop: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>{drillDownMonth}</span>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>
+                        총 <strong style={{ color: '#1e3a8a' }}>{monthBucket.count}건</strong> · <strong style={{ color: '#064e3b' }}>{monthBucket.amount.toLocaleString()}원</strong>
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </>
           )}
