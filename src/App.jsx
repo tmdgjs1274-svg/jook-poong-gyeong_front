@@ -130,6 +130,7 @@ export default function App() {
   const [newGroupRequired, setNewGroupRequired] = useState(false);
   const [newGroupMultiple, setNewGroupMultiple] = useState(false);
   const [newOptionDraft, setNewOptionDraft] = useState({}); // { [group_id]: { name, price } }
+  const [bulkPriceDraft, setBulkPriceDraft] = useState({}); // { [group_id]: { mode: 'fixed'|'percent', sign: '+'|'-', value } } - 옵션 그룹 내 옵션 가격 일괄 조정용
   // PC(넓은 화면)에서 옵션 관리 모달을 좌(그룹 목록)/우(선택한 그룹 상세)로 나눠 보여줄 때, 현재 선택된 그룹
   const [selectedOptionGroupIdForModal, setSelectedOptionGroupIdForModal] = useState(null);
   const [isDesktopAddGroupOpen, setIsDesktopAddGroupOpen] = useState(false); // PC 레이아웃에서 "새 옵션 그룹 추가" 폼 펼침 여부
@@ -930,6 +931,40 @@ export default function App() {
     }
   };
 
+  // 옵션 그룹 하나에 속한 옵션들의 추가금액을 정액/정률로 한번에 가산 또는 감산한다. (해당 그룹에만 적용 - 다른 그룹에는 영향 없음)
+  // 정률 조정 시 소수점 첫째자리에서 반올림하고, 결과가 0원 미만이 되면 0원으로 고정한다.
+  const handleBulkPriceAdjust = async (group) => {
+    const draft = bulkPriceDraft[group.id] || {};
+    const rawValue = Number(draft.value);
+    if (!draft.value || isNaN(rawValue) || rawValue <= 0) return alert('조정할 값을 입력해주세요.');
+    const sign = draft.sign === '-' ? -1 : 1;
+    const mode = draft.mode || 'fixed';
+    const items = group.option_items || [];
+    if (items.length === 0) return alert('조정할 옵션이 없습니다.');
+
+    const modeLabel = mode === 'percent' ? `${rawValue}%` : `${rawValue.toLocaleString()}원`;
+    const signLabel = sign === 1 ? '가산' : '감산';
+    if (!window.confirm(`'${group.name}' 그룹의 옵션 ${items.length}개 가격을 모두 ${modeLabel} ${signLabel}하시겠습니까?`)) return;
+
+    const updated = items.map(opt => {
+      const current = opt.extra_price || 0;
+      let next = mode === 'percent' ? current + sign * current * (rawValue / 100) : current + sign * rawValue;
+      next = Math.round(next);
+      if (next < 0) next = 0;
+      return { id: opt.id, extra_price: next };
+    });
+
+    try {
+      await axios.put(`${API_BASE_URL}/option-items/bulk-price`, { items: updated });
+      setBulkPriceDraft(prev => ({ ...prev, [group.id]: { mode, sign: draft.sign || '+', value: '' } }));
+      showToast(`'${group.name}' 옵션 ${items.length}개의 가격이 조정되었습니다.`);
+      refreshOptionGroupsEverywhere();
+    } catch (err) {
+      console.error(err);
+      alert('일괄 가격 조정 실패');
+    }
+  };
+
   const handleGenericDrop = (list, setList, dragIdx, dropIdx) => {
     const edge = dragIndicator?.edge || 'before';
     clearDragIndicator();
@@ -1360,6 +1395,43 @@ export default function App() {
           <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '6px' }}>옵션이 없습니다.</div>
         )}
       </div>
+
+      {(group.option_items || []).length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px', padding: '8px', background: '#eef2ff', borderRadius: '6px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4338ca', flexShrink: 0 }}>일괄 가격 조정</span>
+          <select
+            value={(bulkPriceDraft[group.id] || {}).sign || '+'}
+            onChange={e => setBulkPriceDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), sign: e.target.value } }))}
+            style={{ padding: '5px 6px', borderRadius: '4px', border: '1px solid #c7d2fe', fontSize: '11px' }}
+          >
+            <option value="+">가산(+)</option>
+            <option value="-">감산(-)</option>
+          </select>
+          <input
+            type="number"
+            placeholder="값"
+            value={(bulkPriceDraft[group.id] || {}).value || ''}
+            onChange={e => setBulkPriceDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), value: e.target.value } }))}
+            onKeyDown={e => { if (e.key === 'Enter') handleBulkPriceAdjust(group); }}
+            style={{ width: '64px', padding: '5px 6px', borderRadius: '4px', border: '1px solid #c7d2fe', fontSize: '11px' }}
+          />
+          <select
+            value={(bulkPriceDraft[group.id] || {}).mode || 'fixed'}
+            onChange={e => setBulkPriceDraft(prev => ({ ...prev, [group.id]: { ...(prev[group.id] || {}), mode: e.target.value } }))}
+            style={{ padding: '5px 6px', borderRadius: '4px', border: '1px solid #c7d2fe', fontSize: '11px' }}
+          >
+            <option value="fixed">원(정액)</option>
+            <option value="percent">%(정률)</option>
+          </select>
+          <button
+            onClick={() => handleBulkPriceAdjust(group)}
+            style={{ padding: '5px 10px', background: '#4338ca', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+          >
+            적용
+          </button>
+          <span style={{ fontSize: '10px', color: '#6366f1', flexBasis: '100%' }}>이 그룹의 옵션 {(group.option_items || []).length}개에 한번에 적용됩니다.</span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '6px' }}>
         <input
