@@ -921,15 +921,23 @@ export default function App() {
     ? filteredRangeOrders.filter(o => (o.created_at || '').split('T')[0] === drillDownDate)
     : [];
 
+  // 가게구분/배달구분/결제수단 배지·필터버튼 공통 색상표 - 연한(pale) 톤으로 구분별 색상을 다르게 하여
+  // 필터 버튼과 주문내역 배지 어디서나 같은 구분은 같은 색으로 보이도록 통일한다.
+  const salesBadgeColors = {
+    store: { bg: '#e0e7ff', text: '#4338ca' },    // 가게구분: 인디고 계열
+    orderType: { bg: '#fef3c7', text: '#b45309' }, // 배달구분(구분): 앰버 계열
+    payment: { bg: '#cffafe', text: '#0e7490' },   // 결제수단: 시안 계열
+  };
+
   // 가게구분/배달구분/결제수단 필터 UI - 일단위/월단위/연단위 화면에서 공통으로 사용한다.
   const renderSalesFilterRow = () => (
     <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? '#2563eb' : '#e2e8f0', color: filterStore === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          <button onClick={() => setFilterStore('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === '전체' ? salesBadgeColors.store.bg : '#e2e8f0', color: filterStore === '전체' ? salesBadgeColors.store.text : '#334155', fontWeight: 'bold' }}>전체</button>
           {storeTags.map(st => (
-            <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? '#2563eb' : '#e2e8f0', color: filterStore === st.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{st.name}</button>
+            <button key={st.id} onClick={() => setFilterStore(st.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterStore === st.name ? salesBadgeColors.store.bg : '#e2e8f0', color: filterStore === st.name ? salesBadgeColors.store.text : '#334155', fontWeight: 'bold' }}>{st.name}</button>
           ))}
         </div>
       </div>
@@ -937,9 +945,9 @@ export default function App() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: isMobile ? '100%' : '200px' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+          <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? salesBadgeColors.orderType.bg : '#e2e8f0', color: filterOrderType === '전체' ? salesBadgeColors.orderType.text : '#334155', fontWeight: 'bold' }}>전체</button>
           {orderTypes.map(ot => (
-            <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? '#2563eb' : '#e2e8f0', color: filterOrderType === ot.name ? '#fff' : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
+            <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === ot.name ? salesBadgeColors.orderType.bg : '#e2e8f0', color: filterOrderType === ot.name ? salesBadgeColors.orderType.text : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
           ))}
         </div>
       </div>
@@ -948,7 +956,7 @@ export default function App() {
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {['전체', '카드', '현금'].map(pt => (
-            <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? '#2563eb' : '#e2e8f0', color: filterPaymentType === pt ? '#fff' : '#334155', fontWeight: 'bold' }}>{pt}</button>
+            <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === pt ? salesBadgeColors.payment.bg : '#e2e8f0', color: filterPaymentType === pt ? salesBadgeColors.payment.text : '#334155', fontWeight: 'bold' }}>{pt}</button>
           ))}
         </div>
       </div>
@@ -971,35 +979,54 @@ export default function App() {
 
   // 월단위/연단위 추이 차트 - 외부 차트 라이브러리 없이 막대 2개(금액/건수)로 표현.
   // clickable=true(월단위)면 막대를 눌러 그 날짜의 주문 목록을 아래에서 조회할 수 있다.
+  // 모바일에서는 막대 폭이 좁아져 정확히 탭하기 어려우므로, (1) 막대는 고정폭 + 가로스크롤로 넓혀서 탭 정확도를 높이고
+  // (2) 그와 별개로 정확한 날짜 선택을 보장하는 선택박스(select)를 함께 제공한다.
   const renderTrendChart = (data, { clickable = false, selectedKey = null, onSelect = null } = {}) => {
     const maxAmount = Math.max(1, ...data.map(d => d.amount));
     const maxCount = Math.max(1, ...data.map(d => d.count));
+    const useMobileLayout = clickable && isMobile;
     return (
       <div>
-        {/* 항목마다 폭을 고정하지 않고 flex:1로 균등 분배해서, 항목 수가 적어도(예: 12개월) 차트가 왼쪽에 몰리지 않고 전체 너비를 채우게 한다 */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', height: '150px', padding: '8px 4px', borderBottom: '2px solid #e2e8f0', boxSizing: 'border-box' }}>
-          {data.map(d => {
-            const isSelected = clickable && selectedKey === d.key;
-            return (
-              <div
-                key={d.key}
-                onClick={clickable ? () => onSelect(d.key) : undefined}
-                title={`${d.label}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, minWidth: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px', width: '100%', height: '110px' }}>
-                  <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
-                  <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
+        {useMobileLayout && (
+          <select
+            value={selectedKey || ''}
+            onChange={e => onSelect(e.target.value || null)}
+            style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', background: '#fff', marginBottom: '10px' }}
+          >
+            <option value="">날짜를 선택하세요</option>
+            {data.map(d => (
+              <option key={d.key} value={d.key}>{d.label} · {d.count}건 · {d.amount.toLocaleString()}원</option>
+            ))}
+          </select>
+        )}
+        {/* 항목마다 폭을 고정하지 않고 flex:1로 균등 분배해서, 항목 수가 적어도(예: 12개월) 차트가 왼쪽에 몰리지 않고 전체 너비를 채우게 한다.
+            단, 모바일의 클릭형(월단위 일자별) 차트는 항목이 많아(최대 31개) flex:1로는 막대가 너무 좁아지므로 고정폭+가로스크롤로 대체한다. */}
+        <div style={{ overflowX: useMobileLayout ? 'auto' : 'visible', width: '100%', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', minWidth: useMobileLayout ? `${data.length * 40}px` : '100%', height: '150px', padding: '8px 4px', borderBottom: '2px solid #e2e8f0', boxSizing: 'border-box' }}>
+            {data.map(d => {
+              const isSelected = clickable && selectedKey === d.key;
+              return (
+                <div
+                  key={d.key}
+                  onClick={clickable ? () => onSelect(d.key) : undefined}
+                  title={`${d.label}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: useMobileLayout ? '0 0 40px' : 1, minWidth: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px', width: '100%', height: '110px' }}>
+                    <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
+                    <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
+                  </div>
+                  <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal' }}>{d.label}</div>
                 </div>
-                <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal' }}>{d.label}</div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '14px', marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
+        <div style={{ display: 'flex', gap: '14px', marginTop: '8px', fontSize: '11px', color: '#64748b', flexWrap: 'wrap' }}>
           <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#93c5fd', marginRight: '4px', borderRadius: '2px' }} />금액</span>
           <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#6ee7b7', marginRight: '4px', borderRadius: '2px' }} />건수</span>
-          {clickable && <span style={{ color: '#94a3b8' }}>막대를 누르면 그 날짜의 주문 목록을 볼 수 있습니다.</span>}
+          {clickable && !useMobileLayout && <span style={{ color: '#94a3b8' }}>막대를 누르면 그 날짜의 주문 목록을 볼 수 있습니다.</span>}
+          {useMobileLayout && <span style={{ color: '#94a3b8' }}>위 선택박스로 날짜를 고르거나, 막대를 좌우로 스크롤하며 탭할 수 있습니다.</span>}
         </div>
       </div>
     );
@@ -1021,9 +1048,9 @@ export default function App() {
         const itemsLabel = order.order_items?.map(i => `${formatOrderItemLabel(i)}(${i.quantity})`).join(', ');
         const badges = (
           <>
-            <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{storeTagsLabel}</span>
-            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
-            <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+            <span style={{ background: salesBadgeColors.store.bg, color: salesBadgeColors.store.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{storeTagsLabel}</span>
+            <span style={{ background: salesBadgeColors.payment.bg, color: salesBadgeColors.payment.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+            <span style={{ background: salesBadgeColors.orderType.bg, color: salesBadgeColors.orderType.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
           </>
         );
 
@@ -1468,9 +1495,9 @@ export default function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', color: '#64748b' }}>
                         <span>{formattedTime}</span>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{getOrderStoreTags(order)}</span>
-                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
-                          <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
+                          <span style={{ background: salesBadgeColors.store.bg, color: salesBadgeColors.store.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{getOrderStoreTags(order)}</span>
+                          <span style={{ background: salesBadgeColors.payment.bg, color: salesBadgeColors.payment.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.payment_type || '카드'}</span>
+                          <span style={{ background: salesBadgeColors.orderType.bg, color: salesBadgeColors.orderType.text, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{order.order_types?.name || '매장'}</span>
                         </div>
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', wordBreak: 'break-all' }}>
@@ -1536,17 +1563,17 @@ export default function App() {
                           <td style={{ color: '#94a3b8' }}>☰</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{formattedTime}</td>
                           <td>
-                            <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            <span style={{ background: salesBadgeColors.store.bg, color: salesBadgeColors.store.text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {getOrderStoreTags(order)}
                             </span>
                           </td>
                           <td>
-                            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            <span style={{ background: salesBadgeColors.payment.bg, color: salesBadgeColors.payment.text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {order.payment_type || '카드'}
                             </span>
                           </td>
                           <td>
-                            <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            <span style={{ background: salesBadgeColors.orderType.bg, color: salesBadgeColors.orderType.text, padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                               {order.order_types?.name || '매장'}
                             </span>
                           </td>
