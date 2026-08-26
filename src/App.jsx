@@ -98,6 +98,19 @@ export default function App() {
   const [editDiscountName, setEditDiscountName] = useState('금액 할인');
   const [editDiscountAmount, setEditDiscountAmount] = useState('');
 
+  // 정률(%) 할인 - 장바구니 전체에 적용, 옵션 금액은 제외하고 메인 메뉴 금액에만 % 할인을 적용한다.
+  // 카트 쪽은 cartDiscountPercent 하나로 관리하고, 주문 수정 모달 쪽은 editingOrderModal.discountPercent로 관리해서
+  // 수정 중인 주문이 바뀔 때마다 자연스럽게 초기화되게 한다.
+  const [isPercentDiscountModalOpen, setIsPercentDiscountModalOpen] = useState(false);
+  const [percentDiscountInput, setPercentDiscountInput] = useState('');
+  const [cartDiscountPercent, setCartDiscountPercent] = useState(null);
+
+  const [isEditPercentDiscountModalOpen, setIsEditPercentDiscountModalOpen] = useState(false);
+  const [editPercentDiscountInput, setEditPercentDiscountInput] = useState('');
+
+  // 매출정산 월/연단위 추이 차트에서 어떤 가게구분 선(전체 포함)을 숨겼는지 - 이름 배열로 관리한다.
+  const [hiddenChartSeries, setHiddenChartSeries] = useState([]);
+
   const [draggedOrderIdx, setDraggedOrderIdx] = useState(null);
   const [draggedMenuIdx, setDraggedMenuIdx] = useState(null);
   const [draggedStoreIdx, setDraggedStoreIdx] = useState(null);
@@ -481,6 +494,98 @@ export default function App() {
     showToast('할인 항목이 추가되었습니다.');
   };
 
+  // 금액 할인 팝업의 숫자 키패드(0~9) - 계산기처럼 숫자를 하나씩 이어붙인다. 앞자리 불필요한 0은 자동으로 정리된다.
+  const appendDigitToAmount = (currentValue, digit) => {
+    const next = `${currentValue || ''}${digit}`;
+    const num = Number(next);
+    return isNaN(num) ? (currentValue || '') : String(num);
+  };
+
+  // 옵션 추가금액 합계 - 정률 할인 계산 시 옵션 금액은 제외하기 위해 사용한다.
+  const getItemExtraTotal = (item) => (item.options || []).reduce((sum, o) => sum + (o.extra_price || 0), 0);
+
+  // 카트/주문수정 항목 1건에 정률(%) 할인을 적용한 최종 단가를 계산한다.
+  // - 할인 항목(item.isDiscount) 자체에는 적용하지 않는다.
+  // - 옵션 추가금액은 할인 대상에서 제외하고, 메인 메뉴 금액에만 퍼센트를 적용한다.
+  // - 소수점 첫째자리에서 반올림한다 (옵션 일괄 가격조정과 동일한 규칙).
+  const getDiscountedItemPrice = (item, percent) => {
+    if (!percent || item.isDiscount) return item.price;
+    const extraTotal = getItemExtraTotal(item);
+    const basePrice = item.price - extraTotal;
+    const discountedBase = Math.round(basePrice * (1 - percent / 100));
+    return discountedBase + extraTotal;
+  };
+
+  // 카트 전체에 정률 할인을 적용/해제한다. 카트 아이템의 price 자체는 건드리지 않고 cartDiscountPercent만 켜고 끄는
+  // 방식이라서, 해제하면 계산 없이 즉시 적용 이전(원래 금액) 상태로 돌아간다. 최종 결제 시에만 할인된 금액이 반영된다.
+  const applyCartPercentDiscount = () => {
+    const pct = Number(percentDiscountInput);
+    if (!pct || pct <= 0 || pct >= 100) return alert('1~99 사이의 유효한 할인율을 입력해주세요.');
+    setCartDiscountPercent(pct);
+    setIsPercentDiscountModalOpen(false);
+    setPercentDiscountInput('');
+    showToast(`전체 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
+  };
+
+  const releaseCartPercentDiscount = () => {
+    setCartDiscountPercent(null);
+    showToast('정률 할인이 해제되었습니다.');
+  };
+
+  // 주문 수정 모달용 정률 할인 - discountPercent를 editingOrderModal 안에 두어서, 수정 대상 주문이 바뀌면
+  // (모달을 새로 열면) 자연스럽게 초기화되게 한다.
+  const applyEditPercentDiscount = () => {
+    const pct = Number(editPercentDiscountInput);
+    if (!pct || pct <= 0 || pct >= 100) return alert('1~99 사이의 유효한 할인율을 입력해주세요.');
+    setEditingOrderModal(prev => ({ ...prev, discountPercent: pct }));
+    setIsEditPercentDiscountModalOpen(false);
+    setEditPercentDiscountInput('');
+    showToast(`전체 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
+  };
+
+  const releaseEditPercentDiscount = () => {
+    setEditingOrderModal(prev => ({ ...prev, discountPercent: null }));
+    showToast('정률 할인이 해제되었습니다.');
+  };
+
+  // 매출정산 월/연단위 추이 차트의 범례(전체/가게구분별) 노출·미노출 토글.
+  const toggleChartSeries = (name) => {
+    setHiddenChartSeries(prev => (prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]));
+  };
+
+  // 금액 할인 팝업 공용 - 자주 쓰는 금액을 눌러서 현재 입력값에 더해준다 (여러 번 눌러 조합 가능).
+  const renderQuickAmountButtons = (currentValue, setValue) => (
+    <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+      {[1000, 2000, 3000].map(amt => (
+        <button
+          key={amt}
+          onClick={() => setValue(String((Number(currentValue) || 0) + amt))}
+          style={{ flex: 1, padding: '11px 0', background: '#fef3c7', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', color: '#92400e', cursor: 'pointer' }}
+        >
+          +{amt.toLocaleString()}
+        </button>
+      ))}
+    </div>
+  );
+
+  // 금액 할인 팝업 공용 - 일반적인 POS 형태의 숫자 키패드(0~9 + 전체지우기 + 한 글자 지우기).
+  const renderAmountKeypad = (currentValue, setValue) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '18px' }}>
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
+        <button
+          key={d}
+          onClick={() => setValue(appendDigitToAmount(currentValue, d))}
+          style={{ padding: '16px 0', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', color: '#334155', cursor: 'pointer' }}
+        >
+          {d}
+        </button>
+      ))}
+      <button onClick={() => setValue('')} style={{ padding: '16px 0', background: '#fee2e2', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', color: '#b91c1c', cursor: 'pointer' }}>C</button>
+      <button onClick={() => setValue(appendDigitToAmount(currentValue, 0))} style={{ padding: '16px 0', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', color: '#334155', cursor: 'pointer' }}>0</button>
+      <button onClick={() => setValue(String(currentValue || '').slice(0, -1))} style={{ padding: '16px 0', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', color: '#334155', cursor: 'pointer' }}>⌫</button>
+    </div>
+  );
+
   const updateQuantity = (cartKey, change) => {
     setCart(prev => prev.map(item => {
       if (item.cart_key === cartKey) {
@@ -499,7 +604,8 @@ export default function App() {
     if (cart.length === 0) return alert('선택된 메뉴가 없습니다!');
     if (!orderType) return alert('주문/배달 구분을 선택해주세요!');
 
-    const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    // 정률 할인이 적용 중이면 저장 시점에만 할인된 금액을 실제로 반영한다 (카트 자체는 건드리지 않는다).
+    const totalAmount = cart.reduce((sum, i) => sum + getDiscountedItemPrice(i, cartDiscountPercent) * i.quantity, 0);
 
     const payload = {
       store_id: 1,
@@ -509,7 +615,7 @@ export default function App() {
       items: cart.map(item => ({
         menu_id: item.menu_id === 0 ? null : item.menu_id,
         quantity: item.quantity,
-        price: item.price,
+        price: getDiscountedItemPrice(item, cartDiscountPercent),
         options: item.options || []
       })),
       created_at: buildCreatedAtISO(orderDate)
@@ -520,6 +626,7 @@ export default function App() {
       await axios.post(`${API_BASE_URL}/orders`, payload);
       showToast('✅ 주문이 정상적으로 저장되었습니다.');
       setCart([]);
+      setCartDiscountPercent(null);
     } catch (err) {
       alert(`주문 저장 실패: ${err.response?.data?.error || err.message}`);
     } finally {
@@ -781,7 +888,8 @@ export default function App() {
     if (!editingOrderModal) return;
     if (editingOrderModal.order_items.length === 0) return alert('선택된 메뉴가 없습니다!');
 
-    const totalAmount = editingOrderModal.order_items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    // 정률 할인이 적용 중이면 저장 시점에만 할인된 금액을 실제로 반영한다.
+    const totalAmount = editingOrderModal.order_items.reduce((sum, i) => sum + getDiscountedItemPrice(i, editingOrderModal.discountPercent) * i.quantity, 0);
 
     const payload = {
       store_id: 1,
@@ -791,7 +899,7 @@ export default function App() {
       items: editingOrderModal.order_items.map(item => ({
         menu_id: item.menu_id === 0 ? null : item.menu_id,
         quantity: item.quantity,
-        price: item.price,
+        price: getDiscountedItemPrice(item, editingOrderModal.discountPercent),
         options: item.options || []
       })),
       // 저장 일자(날짜)만 바뀌었을 때도 원래 주문의 시/분/초는 그대로 유지한다.
@@ -1034,16 +1142,19 @@ export default function App() {
     return tags.length > 0 ? tags.join(', ') : '-';
   };
 
-  // 가게구분/배달구분/결제수단 필터 - 일단위/월단위/연단위 모두 동일한 조건으로 사용한다.
-  const orderMatchesSalesFilter = (order) => {
+  // 가게구분/배달구분/결제수단 필터 - 일단위는 3개 모두, 월단위/연단위는 배달구분/결제수단 필터 UI 자체를 없앴으므로
+  // (skipTypeAndPayment=true) 가게구분만으로 필터링한다.
+  const orderMatchesSalesFilter = (order, { skipTypeAndPayment = false } = {}) => {
     const storeMatch = filterStore === '전체' || order.order_items.some(i => i.menus?.store_tag === filterStore);
+    if (skipTypeAndPayment) return storeMatch;
     const typeMatch = filterOrderType === '전체' || order.order_types?.name === filterOrderType;
     const paymentMatch = filterPaymentType === '전체' || order.payment_type === filterPaymentType;
     return storeMatch && typeMatch && paymentMatch;
   };
 
-  const filteredDailyOrders = dailyOrders.filter(orderMatchesSalesFilter);
-  const filteredRangeOrders = rangeOrders.filter(orderMatchesSalesFilter);
+  const filteredDailyOrders = dailyOrders.filter(order => orderMatchesSalesFilter(order));
+  // 월단위/연단위(salesViewMode !== 'daily')는 배달구분/결제수단 필터를 적용하지 않는다.
+  const filteredRangeOrders = rangeOrders.filter(order => orderMatchesSalesFilter(order, { skipTypeAndPayment: salesViewMode !== 'daily' }));
 
   // 조회 월/연도 선택지 - 실제 주문이 존재하는 월/연도만, 최근 순으로 보여준다.
   const availableMonths = [...new Set(dateList.map(d => d.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
@@ -1144,8 +1255,9 @@ export default function App() {
   };
 
   // 가게구분/배달구분/결제수단 필터 UI - 일단위/월단위/연단위 화면에서 공통으로 사용한다.
+  // 월단위/연단위는 배달구분/결제수단 필터를 없앴으므로 showOrderType/showPayment를 false로 넘겨서 해당 줄 자체를 숨긴다.
   // "전체"는 특정 항목이 아니므로 고정된 파란색으로, 나머지는 항목별로 다른 팔레트 색을 선택 시 보여준다.
-  const renderSalesFilterRow = () => (
+  const renderSalesFilterRow = ({ showOrderType = true, showPayment = true } = {}) => (
     <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: '12px', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', boxSizing: 'border-box', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isMobile ? '1 1 100%' : '0 0 auto' }}>
         <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>가게구분</span>
@@ -1161,43 +1273,50 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isMobile ? '1 1 100%' : '0 0 auto' }}>
-        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
-          {orderTypes.map(ot => {
-            const c = getFilterSelectedColor(getOrderTypeColor(ot.name));
-            const isSel = filterOrderType === ot.name;
-            return (
-              <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
-            );
-          })}
+      {showOrderType && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isMobile ? '1 1 100%' : '0 0 auto' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: 0 }}>배달구분</span>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            <button onClick={() => setFilterOrderType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterOrderType === '전체' ? '#2563eb' : '#e2e8f0', color: filterOrderType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+            {orderTypes.map(ot => {
+              const c = getFilterSelectedColor(getOrderTypeColor(ot.name));
+              const isSel = filterOrderType === ot.name;
+              return (
+                <button key={ot.id} onClick={() => setFilterOrderType(ot.name)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{ot.name}</button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
-        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterPaymentType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === '전체' ? '#2563eb' : '#e2e8f0', color: filterPaymentType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
-          {['카드', '현금'].map(pt => {
-            const c = getFilterSelectedColor(getPaymentColor(pt));
-            const isSel = filterPaymentType === pt;
-            return (
-              <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{pt}</button>
-            );
-          })}
+      {showPayment && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', flexShrink: '0' }}>결제수단</span>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            <button onClick={() => setFilterPaymentType('전체')} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: filterPaymentType === '전체' ? '#2563eb' : '#e2e8f0', color: filterPaymentType === '전체' ? '#fff' : '#334155', fontWeight: 'bold' }}>전체</button>
+            {['카드', '현금'].map(pt => {
+              const c = getFilterSelectedColor(getPaymentColor(pt));
+              const isSel = filterPaymentType === pt;
+              return (
+                <button key={pt} onClick={() => setFilterPaymentType(pt)} style={{ padding: '4px 8px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '11px', background: isSel ? c.bg : '#e2e8f0', color: isSel ? c.text : '#334155', fontWeight: 'bold' }}>{pt}</button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 
-  // 총 주문건수 / 총 매출금액 카드 - 일단위/월단위/연단위 공통
-  const renderSalesTotalCards = (orders) => (
+  // 총 주문건수 / 총 매출금액 카드 - 일단위/월단위/연단위 공통. 월단위/연단위는 showCount=false로 넘겨서
+  // 총 주문건수 집계는 빼고 총 매출금액만 보여준다.
+  const renderSalesTotalCards = (orders, { showCount = true } = {}) => (
     <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-      <div style={{ flex: 1, background: '#eff6ff', padding: '12px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-        <div style={{ fontSize: '12px', color: '#1e40af' }}>총 주문 건수</div>
-        <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e3a8a' }}>{orders.length} 건</div>
-      </div>
+      {showCount && (
+        <div style={{ flex: 1, background: '#eff6ff', padding: '12px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+          <div style={{ fontSize: '12px', color: '#1e40af' }}>총 주문 건수</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e3a8a' }}>{orders.length} 건</div>
+        </div>
+      )}
       <div style={{ flex: 1, background: '#ecfdf5', padding: '12px', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
         <div style={{ fontSize: '12px', color: '#065f46' }}>총 매출 금액</div>
         <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#064e3b' }}>{orders.reduce((s, o) => s + o.total_amount, 0).toLocaleString()} 원</div>
@@ -1209,10 +1328,44 @@ export default function App() {
   // clickable=true(월단위)면 막대를 눌러 그 날짜의 주문 목록을 아래에서 조회할 수 있다.
   // 모바일에서는 막대 폭이 좁아져 정확히 탭하기 어려우므로, (1) 막대는 고정폭 + 가로스크롤로 넓혀서 탭 정확도를 높이고
   // (2) 그와 별개로 정확한 날짜 선택을 보장하는 선택박스(select)를 함께 제공한다.
-  const renderTrendChart = (data, { clickable = false, selectedKey = null, onSelect = null } = {}) => {
-    const maxAmount = Math.max(1, ...data.map(d => d.amount));
-    const maxCount = Math.max(1, ...data.map(d => d.count));
+  // rawOrders: 가게구분 단일 필터(filterStore)와 무관하게 항상 "필터 적용 전" 전체 주문을 넘겨받는다.
+  // 이래야 전체/조면장/밀면회관/죽풍경 선을 동시에 그리고, 범례에서 개별적으로 노출/미노출할 수 있다.
+  const renderTrendChart = (data, rawOrders, { clickable = false, selectedKey = null, onSelect = null } = {}) => {
+    const isDailyKey = data.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(data[0].key);
+    const keyFn = (o) => (isDailyKey ? (o.created_at || '').split('T')[0] : (o.created_at || '').slice(0, 7));
+
+    const storeNames = storeTags.map(s => s.name);
+    const seriesNames = ['전체', ...storeNames];
+
+    // 버킷(일자 또는 월)별로 "전체" 합계와 가게구분별 합계를 한 번의 순회로 집계한다.
+    const totals = {};
+    data.forEach(d => { totals[d.key] = { 전체: 0 }; storeNames.forEach(n => { totals[d.key][n] = 0; }); });
+    (rawOrders || []).forEach(o => {
+      const k = keyFn(o);
+      if (!totals[k]) return;
+      totals[k]['전체'] += o.total_amount || 0;
+      (o.order_items || []).forEach(item => {
+        const tag = item.menus?.store_tag;
+        if (tag && totals[k][tag] !== undefined) {
+          totals[k][tag] += (item.price || 0) * (item.quantity || 0);
+        }
+      });
+    });
+
+    const visibleSeries = seriesNames.filter(n => !hiddenChartSeries.includes(n));
+    const maxAmount = Math.max(1, ...data.flatMap(d => visibleSeries.map(n => totals[d.key][n])));
+
+    const seriesColor = (name) => name === '전체' ? '#1e293b' : getStoreColor(name).text;
+
     const useMobileLayout = clickable && isMobile;
+    const W = Math.max(320, data.length * 32);
+    const H = 200;
+    const padX = 16, padTop = 14, padBottom = 30;
+    const plotW = W - padX * 2, plotH = H - padTop - padBottom;
+    const xStep = data.length > 1 ? plotW / (data.length - 1) : 0;
+    const xFor = (i) => padX + i * xStep;
+    const yFor = (amt) => padTop + plotH - (amt / maxAmount) * plotH;
+
     return (
       <div>
         {useMobileLayout && (
@@ -1223,51 +1376,85 @@ export default function App() {
           >
             <option value="">날짜를 선택하세요</option>
             {data.map(d => (
-              <option key={d.key} value={d.key}>{d.label} · {d.count}건 · {d.amount.toLocaleString()}원</option>
+              <option key={d.key} value={d.key}>{d.label} · {totals[d.key]['전체'].toLocaleString()}원</option>
             ))}
           </select>
         )}
-        {/* 항목마다 폭을 고정하지 않고 flex:1로 균등 분배해서, 항목 수가 적어도(예: 12개월) 차트가 왼쪽에 몰리지 않고 전체 너비를 채우게 한다.
-            단, 모바일의 클릭형(월단위 일자별) 차트는 항목이 많아(최대 31개) flex:1로는 막대가 너무 좁아지므로 고정폭+가로스크롤로 대체한다. */}
-        <div style={{ overflowX: useMobileLayout ? 'auto' : 'visible', width: '100%', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', minWidth: useMobileLayout ? `${data.length * 40}px` : '100%', height: '150px', padding: '8px 4px', borderBottom: '2px solid #e2e8f0', boxSizing: 'border-box' }}>
-            {data.map(d => {
-              const isSelected = clickable && selectedKey === d.key;
-              // d.key가 "YYYY-MM-DD" 형태(일단위 막대)일 때만 요일을 계산해서 "(토)"처럼 보여준다.
-              // (연단위 차트의 월별 막대는 key가 "YYYY-MM"이라 요일이 의미가 없으므로 표시하지 않는다.)
-              let weekdayLabel = '';
-              let weekdayColor = '#94a3b8';
-              if (/^\d{4}-\d{2}-\d{2}$/.test(d.key)) {
-                const [yy, mm, dd] = d.key.split('-').map(Number);
-                const weekday = new Date(yy, mm - 1, dd).getDay();
-                weekdayLabel = ['일', '월', '화', '수', '목', '금', '토'][weekday];
-                weekdayColor = weekday === 0 ? '#dc2626' : weekday === 6 ? '#2563eb' : '#94a3b8';
-              }
+
+        {/* 범례 겸 노출/미노출 필터 - 눌러서 해제하면 그 선이 사라지고, 다시 누르면 보인다. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+          {seriesNames.map(name => {
+            const isHidden = hiddenChartSeries.includes(name);
+            const color = seriesColor(name);
+            return (
+              <button
+                key={name}
+                onClick={() => toggleChartSeries(name)}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', borderRadius: '14px', border: `1px solid ${isHidden ? '#e2e8f0' : color}`, background: isHidden ? '#f8fafc' : '#fff', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', color: isHidden ? '#94a3b8' : '#334155', opacity: isHidden ? 0.7 : 1 }}
+              >
+                <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '50%', background: isHidden ? '#cbd5e1' : color, flexShrink: 0 }} />
+                {name}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ overflowX: 'auto', width: '100%', boxSizing: 'border-box' }}>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: `${Math.min(W, 320)}px`, height: '200px', display: 'block' }}>
+            <line x1={padX} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="#e2e8f0" strokeWidth="1" />
+            {visibleSeries.map(name => {
+              const color = seriesColor(name);
+              const points = data.map((d, i) => `${xFor(i)},${yFor(totals[d.key][name])}`).join(' ');
               return (
-                <div
-                  key={d.key}
-                  onClick={clickable ? () => onSelect(d.key) : undefined}
-                  title={`${d.label}${weekdayLabel ? `(${weekdayLabel})` : ''}: ${d.count}건 / ${d.amount.toLocaleString()}원`}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: useMobileLayout ? '0 0 40px' : 1, minWidth: 0, height: '100%', cursor: clickable ? 'pointer' : 'default', background: isSelected ? '#eff6ff' : 'transparent', borderRadius: '4px', padding: '2px', boxSizing: 'border-box' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px', width: '100%', height: '110px' }}>
-                    <div style={{ width: '8px', height: `${(d.amount / maxAmount) * 100}%`, minHeight: d.amount > 0 ? '2px' : '0', background: isSelected ? '#2563eb' : '#93c5fd', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
-                    <div style={{ width: '8px', height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '2px' : '0', background: isSelected ? '#059669' : '#6ee7b7', borderRadius: '2px 2px 0 0', flexShrink: 0 }} />
-                  </div>
-                  <div style={{ fontSize: '10px', color: isSelected ? '#2563eb' : '#64748b', marginTop: '4px', fontWeight: isSelected ? 'bold' : 'normal', lineHeight: '1.3' }}>{d.label}</div>
-                  {weekdayLabel && (
-                    <div style={{ fontSize: '9px', color: isSelected ? '#2563eb' : weekdayColor, fontWeight: isSelected ? 'bold' : 'normal' }}>({weekdayLabel})</div>
-                  )}
-                </div>
+                <g key={name}>
+                  <polyline points={points} fill="none" stroke={color} strokeWidth={name === '전체' ? 2.5 : 1.8} strokeLinejoin="round" strokeLinecap="round" />
+                  {data.map((d, i) => (
+                    <circle
+                      key={d.key}
+                      cx={xFor(i)}
+                      cy={yFor(totals[d.key][name])}
+                      r={name === '전체' ? 3.2 : 2.2}
+                      fill={color}
+                      onClick={name === '전체' && clickable ? () => onSelect(d.key) : undefined}
+                      style={{ cursor: name === '전체' && clickable ? 'pointer' : 'default' }}
+                    >
+                      <title>{`${d.label} · ${name} · ${totals[d.key][name].toLocaleString()}원`}</title>
+                    </circle>
+                  ))}
+                </g>
               );
             })}
-          </div>
+            {clickable && selectedKey && data.findIndex(d => d.key === selectedKey) !== -1 && (
+              <line
+                x1={xFor(data.findIndex(d => d.key === selectedKey))}
+                y1={padTop}
+                x2={xFor(data.findIndex(d => d.key === selectedKey))}
+                y2={padTop + plotH}
+                stroke="#2563eb"
+                strokeWidth="1"
+                strokeDasharray="3,3"
+              />
+            )}
+            {data.map((d, i) => {
+              // d.key가 "YYYY-MM-DD" 형태(일단위)일 때만 요일에 맞춰 색을 다르게 준다 (연단위 월별 라벨은 항상 기본색).
+              let color = '#94a3b8';
+              if (isDailyKey) {
+                const [yy, mm, dd] = d.key.split('-').map(Number);
+                const weekday = new Date(yy, mm - 1, dd).getDay();
+                color = weekday === 0 ? '#dc2626' : weekday === 6 ? '#2563eb' : '#94a3b8';
+              }
+              const isSelected = clickable && selectedKey === d.key;
+              return (
+                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={data.length > 20 ? 6.5 : 10} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
+                  {d.label}
+                </text>
+              );
+            })}
+          </svg>
         </div>
-        <div style={{ display: 'flex', gap: '14px', marginTop: '8px', fontSize: '11px', color: '#64748b', flexWrap: 'wrap' }}>
-          <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#93c5fd', marginRight: '4px', borderRadius: '2px' }} />금액</span>
-          <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#6ee7b7', marginRight: '4px', borderRadius: '2px' }} />건수</span>
-          {clickable && !useMobileLayout && <span style={{ color: '#94a3b8' }}>막대를 누르면 그 날짜의 주문 목록을 볼 수 있습니다.</span>}
-          {useMobileLayout && <span style={{ color: '#94a3b8' }}>위 선택박스로 날짜를 고르거나, 막대를 좌우로 스크롤하며 탭할 수 있습니다.</span>}
+
+        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+          {clickable ? "'전체' 선의 점을 누르면 그 날짜의 주문 목록을 볼 수 있습니다. 위 범례를 눌러 선을 숨기거나 다시 보이게 할 수 있습니다." : '위 범례를 눌러 선을 숨기거나 다시 보이게 할 수 있습니다.'}
         </div>
       </div>
     );
@@ -1569,11 +1756,26 @@ export default function App() {
 
           {/* 장바구니 및 주문 입력 패널 */}
           <div style={{ width: isMobile ? '100%' : '420px', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
-              <button onClick={() => setIsDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
-                🏷️ 금액 할인 추가
-              </button>
+            <div style={{ marginBottom: cartDiscountPercent ? '8px' : '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={() => setIsDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    🏷️ 금액 할인 추가
+                  </button>
+                  {!cartDiscountPercent && (
+                    <button onClick={() => setIsPercentDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                      ％ 정률 할인
+                    </button>
+                  )}
+                </div>
+              </div>
+              {cartDiscountPercent && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', padding: '7px 10px', borderRadius: '6px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#6d28d9' }}>전체 메뉴 {cartDiscountPercent}% 할인 적용중 (옵션 금액 제외)</span>
+                  <button onClick={releaseCartPercentDiscount} style={{ padding: '4px 8px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>해제</button>
+                </div>
+              )}
             </div>
 
             {/* [개선 2 반영] 저장 일자: 좌우 배치 */}
@@ -1669,7 +1871,18 @@ export default function App() {
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>
+                        {(() => {
+                          const discountedUnit = getDiscountedItemPrice(item, cartDiscountPercent);
+                          if (discountedUnit === item.price) return `${(item.price * item.quantity).toLocaleString()}원`;
+                          return (
+                            <>
+                              <div style={{ fontSize: '10px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: 'normal' }}>{(item.price * item.quantity).toLocaleString()}원</div>
+                              <div>{(discountedUnit * item.quantity).toLocaleString()}원</div>
+                            </>
+                          );
+                        })()}
+                      </td>
                       <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: '8px' }}>
                         <button onClick={() => removeFromCart(item.cart_key)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>X</button>
                       </td>
@@ -1682,7 +1895,7 @@ export default function App() {
             <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <span style={{ fontSize: '15px', fontWeight: 'bold' }}>총 결제 금액</span>
-                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>{cart.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}원</span>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>{cart.reduce((s, i) => s + getDiscountedItemPrice(i, cartDiscountPercent) * i.quantity, 0).toLocaleString()}원</span>
               </div>
               <button
                 onClick={handleOrder}
@@ -1868,6 +2081,7 @@ export default function App() {
                             ...order,
                             created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
                             created_at_original: order.created_at,
+                            discountPercent: null,
                             order_items: order.order_items.map(item => ({
                               menu_id: item.menu_id,
                               name: item.menus?.name || '할인/기타',
@@ -1944,6 +2158,7 @@ export default function App() {
                               ...order,
                               created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
                             created_at_original: order.created_at,
+                              discountPercent: null,
                               order_items: order.order_items.map(item => ({
                                 menu_id: item.menu_id,
                                 name: item.menus?.name || '할인/기타',
@@ -1986,11 +2201,11 @@ export default function App() {
               <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
                 <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedMonth || '월 미선택'} 매출 상세</h2>
 
-                {renderSalesFilterRow()}
-                {renderSalesTotalCards(filteredRangeOrders)}
+                {renderSalesFilterRow({ showOrderType: false, showPayment: false })}
+                {renderSalesTotalCards(filteredRangeOrders, { showCount: false })}
 
                 <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>일자별 추이</h3>
-                {renderTrendChart(monthlyChartData, {
+                {renderTrendChart(monthlyChartData, rangeOrders, {
                   clickable: true,
                   selectedKey: drillDownDate,
                   onSelect: (key) => setDrillDownDate(prev => (prev === key ? null : key))
@@ -2003,7 +2218,6 @@ export default function App() {
                       <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '8px' }}>{drillDownDate} 주문 목록</h3>
                       {dayBucket && (
                         <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>총 {dayBucket.count}건</span>
                           <span style={{ background: '#dcfce7', color: '#065f46', padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dayBucket.amount.toLocaleString()}원</span>
                         </div>
                       )}
@@ -2035,11 +2249,11 @@ export default function App() {
               <div style={{ width: '100%', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
                 <h2 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>{selectedYear ? `${selectedYear}년` : '연도 미선택'} 매출 상세</h2>
 
-                {renderSalesFilterRow()}
-                {renderSalesTotalCards(filteredRangeOrders)}
+                {renderSalesFilterRow({ showOrderType: false, showPayment: false })}
+                {renderSalesTotalCards(filteredRangeOrders, { showCount: false })}
 
                 <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>월별 추이</h3>
-                {renderTrendChart(yearlyChartData)}
+                {renderTrendChart(yearlyChartData, rangeOrders)}
 
                 <div style={{ marginTop: '18px', borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
                   <h3 style={{ fontSize: '14px', marginTop: 0, marginBottom: '10px' }}>월별 요약</h3>
@@ -2048,7 +2262,6 @@ export default function App() {
                       <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 12px' }}>
                         <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>{m.label}</span>
                         <div style={{ display: 'flex', gap: '6px' }}>
-                          <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>{m.count}건</span>
                           <span style={{ background: '#dcfce7', color: '#065f46', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>{m.amount.toLocaleString()}원</span>
                         </div>
                       </div>
@@ -2528,19 +2741,50 @@ export default function App() {
       {/* POS용 할인 모달 */}
       {isDiscountModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '320px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>🏷️ 금액 할인 추가</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 명칭</label>
-              <input type="text" value={discountName} onChange={e => setDiscountName(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '14px', width: '100%', maxWidth: '360px', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>🏷️ 금액 할인 추가</h3>
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>할인 명칭</label>
+              <input type="text" value={discountName} onChange={e => setDiscountName(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '14px' }} />
             </div>
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 금액 (원)</label>
-              <input type="number" placeholder="예: 2000" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>할인 금액 (원)</label>
+              <input type="number" placeholder="예: 2000" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '20px', fontWeight: 'bold', textAlign: 'right' }} />
+            </div>
+            {renderQuickAmountButtons(discountAmount, setDiscountAmount)}
+            {renderAmountKeypad(discountAmount, setDiscountAmount)}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => { setIsDiscountModalOpen(false); setDiscountAmount(''); }} style={{ flex: 1, padding: '12px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>취소</button>
+              <button onClick={addDiscountToCart} style={{ flex: 1, padding: '12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>추가</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 정률(%) 할인 모달 - 장바구니 전체 */}
+      {isPercentDiscountModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '14px', width: '100%', maxWidth: '360px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '18px' }}>％ 정률 할인 추가</h3>
+            <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0, marginBottom: '16px' }}>장바구니의 모든 메뉴에 적용됩니다. 옵션 추가금액은 할인 대상에서 제외됩니다.</p>
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>할인율 (%)</label>
+              <input type="number" placeholder="예: 10" value={percentDiscountInput} onChange={e => setPercentDiscountInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyCartPercentDiscount(); }} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '20px', fontWeight: 'bold', textAlign: 'right' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
+              {[5, 10, 15, 20, 30, 50].map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPercentDiscountInput(String(p))}
+                  style={{ flex: '1 0 27%', padding: '10px 0', background: percentDiscountInput === String(p) ? '#8b5cf6' : '#ede9fe', color: percentDiscountInput === String(p) ? '#fff' : '#6d28d9', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  {p}%
+                </button>
+              ))}
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsDiscountModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
-              <button onClick={addDiscountToCart} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>추가</button>
+              <button onClick={() => { setIsPercentDiscountModalOpen(false); setPercentDiscountInput(''); }} style={{ flex: 1, padding: '12px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>취소</button>
+              <button onClick={applyCartPercentDiscount} style={{ flex: 1, padding: '12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>적용</button>
             </div>
           </div>
         </div>
@@ -2549,18 +2793,20 @@ export default function App() {
       {/* 주문 수정용 할인 모달 */}
       {isEditDiscountModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '320px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '14px', fontSize: '16px' }}>🏷️ 주문 수정 - 금액 할인 추가</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 명칭</label>
-              <input type="text" value={editDiscountName} onChange={e => setEditDiscountName(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '14px', width: '100%', maxWidth: '360px', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>🏷️ 주문 수정 - 금액 할인 추가</h3>
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>할인 명칭</label>
+              <input type="text" value={editDiscountName} onChange={e => setEditDiscountName(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '14px' }} />
             </div>
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>할인 금액 (원)</label>
-              <input type="number" placeholder="예: 2000" value={editDiscountAmount} onChange={e => setEditDiscountAmount(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }} />
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>할인 금액 (원)</label>
+              <input type="number" placeholder="예: 2000" value={editDiscountAmount} onChange={e => setEditDiscountAmount(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '20px', fontWeight: 'bold', textAlign: 'right' }} />
             </div>
+            {renderQuickAmountButtons(editDiscountAmount, setEditDiscountAmount)}
+            {renderAmountKeypad(editDiscountAmount, setEditDiscountAmount)}
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsEditDiscountModalOpen(false)} style={{ flex: 1, padding: '10px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>취소</button>
+              <button onClick={() => { setIsEditDiscountModalOpen(false); setEditDiscountAmount(''); }} style={{ flex: 1, padding: '12px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>취소</button>
               <button onClick={() => {
                 const amt = Number(editDiscountAmount);
                 if (!amt || amt <= 0) return alert('유효한 할인 금액을 입력해주세요.');
@@ -2570,7 +2816,36 @@ export default function App() {
                 }));
                 setEditDiscountAmount('');
                 setIsEditDiscountModalOpen(false);
-              }} style={{ flex: 1, padding: '10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>추가</button>
+              }} style={{ flex: 1, padding: '12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>추가</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 정률(%) 할인 모달 - 주문 수정 */}
+      {isEditPercentDiscountModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, boxSizing: 'border-box', padding: '16px' }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '14px', width: '100%', maxWidth: '360px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '18px' }}>％ 주문 수정 - 정률 할인 추가</h3>
+            <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0, marginBottom: '16px' }}>이 주문의 모든 메뉴에 적용됩니다. 옵션 추가금액은 할인 대상에서 제외됩니다.</p>
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>할인율 (%)</label>
+              <input type="number" placeholder="예: 10" value={editPercentDiscountInput} onChange={e => setEditPercentDiscountInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyEditPercentDiscount(); }} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '20px', fontWeight: 'bold', textAlign: 'right' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
+              {[5, 10, 15, 20, 30, 50].map(p => (
+                <button
+                  key={p}
+                  onClick={() => setEditPercentDiscountInput(String(p))}
+                  style={{ flex: '1 0 27%', padding: '10px 0', background: editPercentDiscountInput === String(p) ? '#8b5cf6' : '#ede9fe', color: editPercentDiscountInput === String(p) ? '#fff' : '#6d28d9', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  {p}%
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => { setIsEditPercentDiscountModalOpen(false); setEditPercentDiscountInput(''); }} style={{ flex: 1, padding: '12px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>취소</button>
+              <button onClick={applyEditPercentDiscount} style={{ flex: 1, padding: '12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>적용</button>
             </div>
           </div>
         </div>
@@ -2580,11 +2855,26 @@ export default function App() {
       {editingOrderModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, boxSizing: 'border-box', padding: '16px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px' }}>✏️ 주문 상세 수정</h3>
-              <button onClick={() => setIsEditDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
-                🏷️ 금액 할인 추가
-              </button>
+            <div style={{ marginBottom: editingOrderModal.discountPercent ? '8px' : '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '16px' }}>✏️ 주문 상세 수정</h3>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={() => setIsEditDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    🏷️ 금액 할인 추가
+                  </button>
+                  {!editingOrderModal.discountPercent && (
+                    <button onClick={() => setIsEditPercentDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                      ％ 정률 할인
+                    </button>
+                  )}
+                </div>
+              </div>
+              {editingOrderModal.discountPercent && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', padding: '7px 10px', borderRadius: '6px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#6d28d9' }}>전체 메뉴 {editingOrderModal.discountPercent}% 할인 적용중 (옵션 금액 제외)</span>
+                  <button onClick={releaseEditPercentDiscount} style={{ padding: '4px 8px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>해제</button>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px', gap: '12px' }}>
@@ -2688,7 +2978,18 @@ export default function App() {
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>{(item.price * item.quantity).toLocaleString()}원</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>
+                        {(() => {
+                          const discountedUnit = getDiscountedItemPrice(item, editingOrderModal.discountPercent);
+                          if (discountedUnit === item.price) return `${(item.price * item.quantity).toLocaleString()}원`;
+                          return (
+                            <>
+                              <div style={{ fontSize: '10px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: 'normal' }}>{(item.price * item.quantity).toLocaleString()}원</div>
+                              <div>{(discountedUnit * item.quantity).toLocaleString()}원</div>
+                            </>
+                          );
+                        })()}
+                      </td>
                       <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: '8px' }}>
                         <button onClick={() => {
                           setEditingOrderModal(prev => ({
@@ -2706,7 +3007,7 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: '2px solid #f1f5f9', paddingTop: '12px' }}>
               <span style={{ fontSize: '14px', fontWeight: 'bold' }}>수정된 총 금액</span>
               <span style={{ fontSize: '17px', fontWeight: 'bold', color: '#2563eb' }}>
-                {editingOrderModal.order_items.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}원
+                {editingOrderModal.order_items.reduce((s, i) => s + getDiscountedItemPrice(i, editingOrderModal.discountPercent) * i.quantity, 0).toLocaleString()}원
               </span>
             </div>
 
