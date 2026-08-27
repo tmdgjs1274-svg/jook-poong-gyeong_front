@@ -60,6 +60,8 @@ export default function App() {
   const [selectedMgmtCategory, setSelectedMgmtCategory] = useState('전체');
   // 메뉴관리 - 현재 화면(가게/카테고리 필터가 적용된 목록)에 대한 클라이언트 사이드 이름 검색(LIKE, 대소문자 무시).
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
+  // 주문입력 - 메뉴 선택 화면에서도 동일하게 현재 화면(가게/카테고리 필터가 적용된 목록) 기준 이름 검색.
+  const [posMenuSearchQuery, setPosMenuSearchQuery] = useState('');
 
   const [dateList, setDateList] = useState([]);
   const [selectedDate, setSelectedDate] = useState(getTodayStr());
@@ -111,6 +113,8 @@ export default function App() {
 
   const [isEditPercentDiscountModalOpen, setIsEditPercentDiscountModalOpen] = useState(false);
   const [editPercentDiscountInput, setEditPercentDiscountInput] = useState('');
+  // null이면 "이 주문 전체 할인" 팝업, 인덱스가 들어있으면 "메뉴 1건만 할인" 팝업으로 동작한다.
+  const [editPercentDiscountTargetIdx, setEditPercentDiscountTargetIdx] = useState(null);
 
   // 매출정산 월/연단위 추이 차트에서 어떤 가게구분 선(전체 포함)을 숨겼는지 - 이름 배열로 관리한다.
   const [hiddenChartSeries, setHiddenChartSeries] = useState([]);
@@ -568,21 +572,41 @@ export default function App() {
     setIsPercentDiscountModalOpen(true);
   };
 
-  // 주문 수정 모달용 정률 할인 - discountPercent를 editingOrderModal 안에 두어서, 수정 대상 주문이 바뀌면
-  // (모달을 새로 열면) 자연스럽게 초기화되게 한다. 적용/해제 시 order_items[].discountPercent(개별 항목의
-  // 할인율)도 함께 맞춰줘야, 상단 배지 상태와 개별 항목 상태가 어긋나지 않는다(수정모드 재저장 후 할인이
-  // 안 보이던 문제의 원인이었음).
+  // 주문 수정 모달용 정률 할인 - 카트와 동일하게 "전체 메뉴 할인" 또는 "메뉴 1건만 할인" 둘 중 하나만
+  // 적용 가능하며(동시 적용 불가), 서로 전환할 때는 확인 후 기존 할인을 해제하고 적용한다.
+  // discountPercent를 editingOrderModal 안에 두어서, 수정 대상 주문이 바뀌면(모달을 새로 열면) 자연스럽게
+  // 초기화되게 한다. 적용/해제 시 order_items[].discountPercent(개별 항목의 할인율)도 항상 함께 맞춰줘야,
+  // 상단 배지 상태와 개별 항목 상태가 어긋나지 않는다(수정모드 재저장 후 할인이 안 보이던 문제의 원인이었음).
   const applyEditPercentDiscount = () => {
     const pct = Number(editPercentDiscountInput);
     if (!pct || pct <= 0 || pct >= 100) return alert('1~99 사이의 유효한 할인율을 입력해주세요.');
-    setEditingOrderModal(prev => ({
-      ...prev,
-      discountPercent: pct,
-      order_items: prev.order_items.map(item => item.isDiscount ? item : { ...item, discountPercent: pct })
-    }));
+
+    if (editPercentDiscountTargetIdx != null) {
+      // 메뉴 1건에만 할인 적용 - 전체 할인이 적용 중이면 먼저 해제할지 확인한다.
+      if (editingOrderModal.discountPercent) {
+        if (!window.confirm('전체 메뉴 할인이 해제되고, 선택한 메뉴에만 정률 할인이 적용됩니다. 계속하시겠습니까?')) return;
+      }
+      const targetIdx = editPercentDiscountTargetIdx;
+      setEditingOrderModal(prev => ({
+        ...prev,
+        discountPercent: null,
+        order_items: prev.order_items.map((item, i) => (i === targetIdx ? { ...item, discountPercent: pct } : { ...item, discountPercent: null }))
+      }));
+      showToast(`선택한 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
+    } else {
+      // 전체 할인 적용 - 메뉴별로 걸려있는 개별 할인이 있으면 먼저 모두 해제할지 확인한다.
+      const hasItemDiscount = editingOrderModal.order_items.some(item => item.discountPercent);
+      if (hasItemDiscount && !window.confirm('메뉴별로 적용된 할인이 모두 해제되고, 전체 메뉴에 할인이 적용됩니다. 계속하시겠습니까?')) return;
+      setEditingOrderModal(prev => ({
+        ...prev,
+        discountPercent: pct,
+        order_items: prev.order_items.map(item => item.isDiscount ? item : { ...item, discountPercent: pct })
+      }));
+      showToast(`전체 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
+    }
     setIsEditPercentDiscountModalOpen(false);
     setEditPercentDiscountInput('');
-    showToast(`전체 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
+    setEditPercentDiscountTargetIdx(null);
   };
 
   const releaseEditPercentDiscount = () => {
@@ -590,6 +614,23 @@ export default function App() {
       ...prev,
       discountPercent: null,
       order_items: prev.order_items.map(item => ({ ...item, discountPercent: null }))
+    }));
+    showToast('정률 할인이 해제되었습니다.');
+  };
+
+  // 주문 수정 모달의 특정 메뉴 1건에 정률 할인을 걸기 위해 팝업을 연다 (카트와 동일한 팝업을 재사용).
+  const openEditItemPercentDiscount = (idx) => {
+    setEditPercentDiscountTargetIdx(idx);
+    setIsEditPercentDiscountModalOpen(true);
+  };
+
+  // 주문 수정 모달에서 메뉴 1건의 정률 할인만 해제한다. 이 시점부터는 더 이상 "전체 메뉴에 동일하게 적용된"
+  // 상태가 아니므로, 상단 "전체 메뉴 할인 적용중" 배지(discountPercent)도 함께 내려서 어긋나지 않게 한다.
+  const releaseEditItemDiscount = (idx) => {
+    setEditingOrderModal(prev => ({
+      ...prev,
+      discountPercent: null,
+      order_items: prev.order_items.map((it, i) => (i === idx ? { ...it, discountPercent: null } : it))
     }));
     showToast('정률 할인이 해제되었습니다.');
   };
@@ -1897,7 +1938,7 @@ export default function App() {
                     🏷️ 금액 할인 추가
                   </button>
                   {!cartDiscountPercent && (
-                    <button onClick={() => setIsPercentDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    <button onClick={() => { setPercentDiscountTargetKey(null); setIsPercentDiscountModalOpen(true); }} style={{ padding: '6px 10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                       ％ 정률 할인
                     </button>
                   )}
@@ -1979,7 +2020,7 @@ export default function App() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
-                    <th style={{ width: '32%' }}>메뉴</th><th style={{ width: '14%' }}>수량</th><th style={{ width: '20%' }}>할인</th><th style={{ width: '24%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
+                    <th style={{ width: '29%' }}>메뉴</th><th style={{ width: '13%' }}>수량</th><th style={{ width: '23%' }}>할인</th><th style={{ width: '25%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2007,9 +2048,9 @@ export default function App() {
                       <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
                         {!item.isDiscount && (
                           item.discountPercent ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>％ {item.discountPercent}%</span>
-                              <button onClick={() => releaseCartItemDiscount(item.cart_key)} style={{ padding: '2px 5px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer' }}>해제</button>
+                            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: '3px' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>％{item.discountPercent}%</span>
+                              <button onClick={() => releaseCartItemDiscount(item.cart_key)} style={{ padding: '2px 4px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>해제</button>
                             </div>
                           ) : (
                             <button onClick={() => openItemPercentDiscount(item.cart_key)} style={{ padding: '3px 6px', background: '#ede9fe', color: '#6d28d9', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>％ 할인</button>
@@ -2112,12 +2153,23 @@ export default function App() {
               ))}
             </div>
 
+            <div style={{ marginBottom: '14px' }}>
+              <input
+                type="text"
+                value={posMenuSearchQuery}
+                onChange={e => setPosMenuSearchQuery(e.target.value)}
+                placeholder="🔍 메뉴 이름으로 검색 (현재 화면 기준)"
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
+              />
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
               {menus.filter(m => {
                 const storeMatch = !selectedPosStore || m.store_tag === selectedPosStore;
                 const menuCatName = m.categories?.name || '카테고리 없음';
                 const catMatch = selectedPosCategory === '' || menuCatName === selectedPosCategory;
-                return storeMatch && catMatch;
+                const searchMatch = !posMenuSearchQuery.trim() || (m.name || '').toLowerCase().includes(posMenuSearchQuery.trim().toLowerCase());
+                return storeMatch && catMatch && searchMatch;
               }).map(m => {
                 const isExpanded = expandedMenuOptions?.menuId === m.id;
                 return (
@@ -2953,34 +3005,37 @@ export default function App() {
         </div>
       )}
 
-      {/* 정률(%) 할인 모달 - 주문 수정 */}
-      {isEditPercentDiscountModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, boxSizing: 'border-box', padding: '16px' }}>
-          <div style={{ background: '#fff', padding: '28px', borderRadius: '16px', width: '100%', maxWidth: '420px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '20px' }}>％ 주문 수정 - 정률 할인 추가</h3>
-            <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0, marginBottom: '18px' }}>이 주문의 모든 메뉴에 적용됩니다. 옵션 추가금액은 할인 대상에서 제외됩니다.</p>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '14px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>할인율 (%)</label>
-              <input type="number" placeholder="예: 10" value={editPercentDiscountInput} onChange={e => setEditPercentDiscountInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyEditPercentDiscount(); }} style={{ width: '100%', padding: '16px', borderRadius: '10px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '26px', fontWeight: 'bold', textAlign: 'right' }} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '22px' }}>
-              {[5, 10, 15, 20, 30, 50].map(p => (
-                <button
-                  key={p}
-                  onClick={() => setEditPercentDiscountInput(String(p))}
-                  style={{ flex: '1 0 27%', padding: '14px 0', background: editPercentDiscountInput === String(p) ? '#8b5cf6' : '#ede9fe', color: editPercentDiscountInput === String(p) ? '#fff' : '#6d28d9', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
-                >
-                  {p}%
-                </button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => { setIsEditPercentDiscountModalOpen(false); setEditPercentDiscountInput(''); }} style={{ flex: 1, padding: '15px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>취소</button>
-              <button onClick={applyEditPercentDiscount} style={{ flex: 1, padding: '15px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>적용</button>
+      {/* 정률(%) 할인 모달 - 주문 수정 전체, 또는 editPercentDiscountTargetIdx가 있으면 특정 메뉴 1건 */}
+      {isEditPercentDiscountModalOpen && (() => {
+        const targetItem = editPercentDiscountTargetIdx != null ? editingOrderModal.order_items[editPercentDiscountTargetIdx] : null;
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, boxSizing: 'border-box', padding: '16px' }}>
+            <div style={{ background: '#fff', padding: '28px', borderRadius: '16px', width: '100%', maxWidth: '420px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
+              <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '20px' }}>％ 주문 수정 - {targetItem ? `${targetItem.name} 할인 추가` : '정률 할인 추가'}</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0, marginBottom: '18px' }}>{targetItem ? '선택한 메뉴에만 적용됩니다. 옵션 추가금액은 할인 대상에서 제외됩니다.' : '이 주문의 모든 메뉴에 적용됩니다. 옵션 추가금액은 할인 대상에서 제외됩니다.'}</p>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '14px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>할인율 (%)</label>
+                <input type="number" placeholder="예: 10" value={editPercentDiscountInput} onChange={e => setEditPercentDiscountInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyEditPercentDiscount(); }} style={{ width: '100%', padding: '16px', borderRadius: '10px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '26px', fontWeight: 'bold', textAlign: 'right' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '22px' }}>
+                {[5, 10, 15, 20, 30, 50].map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setEditPercentDiscountInput(String(p))}
+                    style={{ flex: '1 0 27%', padding: '14px 0', background: editPercentDiscountInput === String(p) ? '#8b5cf6' : '#ede9fe', color: editPercentDiscountInput === String(p) ? '#fff' : '#6d28d9', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    {p}%
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => { setIsEditPercentDiscountModalOpen(false); setEditPercentDiscountInput(''); setEditPercentDiscountTargetIdx(null); }} style={{ flex: 1, padding: '15px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>취소</button>
+                <button onClick={applyEditPercentDiscount} style={{ flex: 1, padding: '15px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>적용</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 주문 상세 수정 모달 */}
       {editingOrderModal && (
@@ -2994,7 +3049,7 @@ export default function App() {
                     🏷️ 금액 할인 추가
                   </button>
                   {!editingOrderModal.discountPercent && (
-                    <button onClick={() => setIsEditPercentDiscountModalOpen(true)} style={{ padding: '6px 10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    <button onClick={() => { setEditPercentDiscountTargetIdx(null); setIsEditPercentDiscountModalOpen(true); }} style={{ padding: '6px 10px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                       ％ 정률 할인
                     </button>
                   )}
@@ -3110,16 +3165,15 @@ export default function App() {
                         )}
                       </td>
                       <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
-                        {!item.isDiscount && item.discountPercent && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-                            <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>％ {item.discountPercent}%</span>
-                            <button onClick={() => {
-                              setEditingOrderModal(prev => ({
-                                ...prev,
-                                order_items: prev.order_items.map((it, i) => i === idx ? { ...it, discountPercent: null } : it)
-                              }));
-                            }} style={{ padding: '2px 5px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer' }}>해제</button>
-                          </div>
+                        {!item.isDiscount && (
+                          item.discountPercent ? (
+                            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: '3px' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>％{item.discountPercent}%</span>
+                              <button onClick={() => releaseEditItemDiscount(idx)} style={{ padding: '2px 4px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>해제</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => openEditItemPercentDiscount(idx)} style={{ padding: '3px 6px', background: '#ede9fe', color: '#6d28d9', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>％ 할인</button>
+                          )
                         )}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>
