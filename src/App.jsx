@@ -575,11 +575,12 @@ export default function App() {
     setIsPercentDiscountModalOpen(true);
   };
 
-  // 주문 수정 모달용 정률 할인 - 카트와 동일하게 "전체 메뉴 할인" 또는 "메뉴 1건만 할인" 둘 중 하나만
-  // 적용 가능하며(동시 적용 불가), 서로 전환할 때는 확인 후 기존 할인을 해제하고 적용한다.
-  // discountPercent를 editingOrderModal 안에 두어서, 수정 대상 주문이 바뀌면(모달을 새로 열면) 자연스럽게
-  // 초기화되게 한다. 적용/해제 시 order_items[].discountPercent(개별 항목의 할인율)도 항상 함께 맞춰줘야,
-  // 상단 배지 상태와 개별 항목 상태가 어긋나지 않는다(수정모드 재저장 후 할인이 안 보이던 문제의 원인이었음).
+  // 주문 수정 모달용 정률 할인 - 카트(cartDiscountPercent / item.discountPercent)와 완전히 동일한 방식으로
+  // 동작한다: "전체 메뉴 할인"(editingOrderModal.discountPercent)과 "메뉴 1건만 할인"(item.discountPercent)은
+  // 항상 서로 배타적으로만 존재하고(둘 다 동시에 값이 있는 경우가 없음), 한쪽을 적용하면 다른 쪽은 전부 null로
+  // 지워진다(카트의 applyCartPercentDiscount와 동일한 규칙). 그래서 화면 표시는 각자 자기 값만 보고 판단하면
+  // 되고, 최종 계산은 getDiscountedItemPrice(item, percent)의 "item.discountPercent || percent" 우선순위
+  // 하나로 충분하다 - 카트와 저장 로직을 그대로 재사용할 수 있는 이유이기도 하다.
   const applyEditPercentDiscount = () => {
     const pct = Number(editPercentDiscountInput);
     if (!pct || pct <= 0 || pct >= 100) return alert('1~99 사이의 유효한 할인율을 입력해주세요.');
@@ -593,7 +594,7 @@ export default function App() {
       setEditingOrderModal(prev => ({
         ...prev,
         discountPercent: null,
-        order_items: prev.order_items.map((item, i) => (i === targetIdx ? { ...item, discountPercent: pct } : { ...item, discountPercent: null }))
+        order_items: prev.order_items.map((item, i) => (i === targetIdx ? { ...item, discountPercent: pct } : item))
       }));
       showToast(`선택한 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
     } else {
@@ -603,7 +604,7 @@ export default function App() {
       setEditingOrderModal(prev => ({
         ...prev,
         discountPercent: pct,
-        order_items: prev.order_items.map(item => item.isDiscount ? item : { ...item, discountPercent: pct })
+        order_items: prev.order_items.map(item => (item.discountPercent ? { ...item, discountPercent: null } : item))
       }));
       showToast(`전체 메뉴에 ${pct}% 할인이 적용되었습니다. (옵션 금액 제외)`);
     }
@@ -613,17 +614,12 @@ export default function App() {
   };
 
   const releaseEditPercentDiscount = () => {
-    setEditingOrderModal(prev => ({
-      ...prev,
-      discountPercent: null,
-      order_items: prev.order_items.map(item => ({ ...item, discountPercent: null }))
-    }));
+    setEditingOrderModal(prev => ({ ...prev, discountPercent: null }));
     showToast('정률 할인이 해제되었습니다.');
   };
 
   // 주문 수정 모달의 특정 메뉴 1건에 정률 할인을 걸기(또는 이미 걸려 있으면 % 값을 바꾸기) 위해 팝업을 연다
-  // (카트와 동일한 팝업을 재사용). 전체 할인이 적용되어 있어서 이 항목이 이미 그 값을 갖고 있는 경우에도
-  // 이 버튼으로 다시 열 수 있어야 "메뉴별로 따로 걸기"로 전환할 수 있으므로, 배지 자체를 눌러도 열리게 한다.
+  // (카트와 동일한 팝업을 재사용). 이미 걸려 있는 값이 있으면 입력란에 미리 채워준다.
   const openEditItemPercentDiscount = (idx) => {
     const current = editingOrderModal?.order_items?.[idx]?.discountPercent;
     setEditPercentDiscountInput(current ? String(current) : '');
@@ -631,12 +627,10 @@ export default function App() {
     setIsEditPercentDiscountModalOpen(true);
   };
 
-  // 주문 수정 모달에서 메뉴 1건의 정률 할인만 해제한다. 이 시점부터는 더 이상 "전체 메뉴에 동일하게 적용된"
-  // 상태가 아니므로, 상단 "전체 메뉴 할인 적용중" 배지(discountPercent)도 함께 내려서 어긋나지 않게 한다.
+  // 주문 수정 모달에서 메뉴 1건의 정률 할인만 해제한다 (카트의 releaseCartItemDiscount와 동일).
   const releaseEditItemDiscount = (idx) => {
     setEditingOrderModal(prev => ({
       ...prev,
-      discountPercent: null,
       order_items: prev.order_items.map((it, i) => (i === idx ? { ...it, discountPercent: null } : it))
     }));
     showToast('정률 할인이 해제되었습니다.');
@@ -2160,14 +2154,17 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ marginBottom: '14px' }}>
+            <div style={{ marginBottom: '14px', position: 'relative' }}>
               <input
                 type="text"
                 value={posMenuSearchQuery}
                 onChange={e => setPosMenuSearchQuery(e.target.value)}
                 placeholder="🔍 메뉴 이름으로 검색 (현재 화면 기준)"
-                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
+                style={{ width: '100%', padding: '9px 32px 9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
               />
+              {posMenuSearchQuery && (
+                <button onClick={() => setPosMenuSearchQuery('')} title="검색어 지우기" style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', padding: 0, background: '#e2e8f0', color: '#64748b', border: 'none', borderRadius: '50%', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', lineHeight: '20px', textAlign: 'center' }}>✕</button>
+              )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
@@ -2517,14 +2514,17 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ marginBottom: '14px' }}>
+          <div style={{ marginBottom: '14px', position: 'relative' }}>
             <input
               type="text"
               value={menuSearchQuery}
               onChange={e => setMenuSearchQuery(e.target.value)}
               placeholder="🔍 메뉴 이름으로 검색 (현재 화면 기준)"
-              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
+              style={{ width: '100%', padding: '9px 32px 9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
             />
+            {menuSearchQuery && (
+              <button onClick={() => setMenuSearchQuery('')} title="검색어 지우기" style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', padding: 0, background: '#e2e8f0', color: '#64748b', border: 'none', borderRadius: '50%', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', lineHeight: '20px', textAlign: 'center' }}>✕</button>
+            )}
           </div>
 
           {(() => {
