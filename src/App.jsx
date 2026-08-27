@@ -37,6 +37,25 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Vite 기본 템플릿의 index.css에는 흔히 "#root { max-width: 1280px; margin: 0 auto; padding: 2rem; }"가
+  // 남아있는 경우가 많다. 이 컴포넌트 안에서 width: 100%/100vw를 줘도 부모(#root)가 이미 좁게 잡혀 있으면
+  // 실제로는 그 안에서만 렌더링되어 화면 일부만 쓰게 된다. PC에서 전체 화면 너비를 제대로 쓸 수 있도록
+  // 마운트 시 #root의 폭 제약을 직접 풀어준다.
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (root) {
+      root.style.maxWidth = 'none';
+      root.style.width = '100%';
+      root.style.margin = '0';
+      root.style.padding = '0';
+      root.style.textAlign = 'left';
+    }
+    // html/body 쪽에 남아있을 수 있는 폭 제한도 함께 풀어준다 (혹시 #root가 아니라 body에 걸려있는 경우 대비).
+    document.documentElement.style.maxWidth = 'none';
+    document.body.style.maxWidth = 'none';
+    document.body.style.margin = '0';
+  }, []);
+
   const [activeTab, setActiveTab] = useState('pos');
   const [menus, setMenus] = useState([]);
   // [버그 수정] 이전에는 주문입력 탭과 메뉴관리 탭이 같은 categories 상태를 공유해서,
@@ -2003,8 +2022,10 @@ export default function App() {
       {activeTab === 'pos' && (
         <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row', boxSizing: 'border-box', width: '100%', alignItems: isMobile ? 'flex-start' : 'stretch' }}>
 
-          {/* 장바구니 및 주문 입력 패널 - PC에서는 오른쪽 메뉴 패널과 높이를 맞춰(alignItems: stretch) 세로 공간을 꽉 채운다 */}
-          <div style={{ width: isMobile ? '100%' : '640px', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+          {/* 장바구니 및 주문 입력 패널 - PC에서는 뷰포트 높이에 맞춰 패널 자체 높이를 고정하고(그래야 아래 주문
+              항목 목록의 flex:1이 실제로 "남는 공간만큼"으로 제한되어 내부 스크롤이 걸린다), 항목이 아무리
+              많아져도 "결제 및 주문 저장" 버튼은 항상 패널 하단에 고정되어 보이도록 한다. */}
+          <div style={{ width: isMobile ? '100%' : '640px', height: isMobile ? 'auto' : 'calc(100vh - 104px)', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
             <div style={{ marginBottom: cartDiscountPercent ? '8px' : '14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
