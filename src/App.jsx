@@ -667,17 +667,27 @@ export default function App() {
       };
     });
 
-    // 상단 "전체 메뉴 할인" 배지/상태(discountPercent)는 항상 null로 시작한다. 개별 항목들의 할인율이
-    // 우연히 전부 같더라도 그것이 "전체 일괄 적용"이었는지 "메뉴별로 따로 건 것"이었는지는 저장된 값만으로는
-    // 구분할 수 없기 때문에, 여기서 임의로 "전체 적용중"이라고 추정해서 보여주지 않는다(실제로 전체 적용을
-    // 한 적이 없는데도 그렇게 노출되는 문제가 있었음). 각 항목의 할인율은 아래 목록에서 항목별로 그대로 보여주고,
-    // 해제도 항목별 해제 버튼으로 한다.
+    // 상단 "전체 메뉴 할인" 배지/상태(discountPercent)를 복원할지 판단한다. DB에는 항목별 원래 금액만
+    // 저장되어 있어서 "전체 일괄 적용"이었는지 "메뉴별로 따로 건 것"이었는지 100% 확신할 수는 없지만,
+    // 할인 대상 메뉴가 2건 이상이고 전부 같은 할인율이면 "전체 적용"으로 보는 게 실제 사용 맥락상 맞다
+    // (메뉴가 1건뿐인 주문은 "전체"와 "그 메뉴 1건"이 근본적으로 구분이 안 되므로, 그 경우만 메뉴별로 표시해서
+    // 예전에 있었던 "메뉴 1건 할인일 뿐인데 전체 할인으로 잘못 표시되는" 문제를 피한다).
+    // 전체로 판단되면, 항목별 개별 표시와 중복/혼동되지 않도록 각 항목의 discountPercent는 비워서
+    // (해제도 상단 "해제" 버튼 하나로 전체가 한번에 풀리도록) 방금 막 전체 할인을 적용한 상태와 동일하게 만든다.
+    const discountable = order_items.filter(i => !i.isDiscount);
+    const uniformPercent = discountable.length >= 2 && discountable.every(i => i.discountPercent != null && i.discountPercent === discountable[0].discountPercent)
+      ? discountable[0].discountPercent
+      : null;
+    const finalItems = uniformPercent
+      ? order_items.map(item => (item.isDiscount ? item : { ...item, discountPercent: null }))
+      : order_items;
+
     return {
       ...order,
       created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
       created_at_original: order.created_at,
-      discountPercent: null,
-      order_items
+      discountPercent: uniformPercent,
+      order_items: finalItems
     };
   };
 
