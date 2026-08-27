@@ -637,16 +637,31 @@ export default function App() {
   };
 
   // 저장된 주문(order)을 "주문 상세 수정" 모달 상태로 변환한다.
-  // order_items.original_price(할인 전 원래 가격)가 저장되어 있으면, 옵션 금액을 제외한 뒤
-  // 현재 가격과 비교해서 그 항목에 걸려 있던 정률 할인율을 역산해 복원한다.
-  // original_price가 없으면(과거 데이터이거나 아직 컬럼이 없는 환경) 할인 정보 없이 현재 가격을 그대로 쓴다.
+  //
+  // 전체(주문 단위) 할인 여부는 order.discount_percent 컬럼을 그대로 신뢰한다 - 이 컬럼이 채워져 있다는 것은
+  // 저장 당시 "전체 메뉴 할인" 컨트롤로 적용했다는 뜻이므로, 항목별 값이 우연히 같은지를 추측할 필요가 없다
+  // (메뉴가 1개뿐인 주문은 "전체 적용"과 "그 메뉴 1건만 적용"을 항목 값만으로는 절대 구분할 수 없어서,
+  // 이 컬럼이 생기기 전에는 한쪽을 고치면 반대쪽이 깨지는 문제가 있었다). 전체 할인이 있으면 항목별
+  // discountPercent는 전부 비워서, 방금 막 전체 할인을 적용한 상태와 동일한 모양으로 만든다(해제도
+  // 상단 "해제" 버튼 하나로 전체가 한번에 풀리도록).
+  //
+  // 전체 할인이 없는 경우에만, order_items.original_price(할인 전 원래 가격)와 현재 가격을 비교해서
+  // 그 항목에 걸려 있던 "메뉴 1건 할인"의 할인율을 역산해 항목별로 복원한다.
+  // discount_percent/original_price가 없으면(과거 데이터이거나 아직 컬럼이 없는 환경) 할인 정보 없이
+  // 현재 가격을 그대로 쓴다.
   const buildEditingOrderModal = (order) => {
+    const wholeOrderPercent = order.discount_percent != null ? order.discount_percent : null;
+
     const order_items = (order.order_items || []).map(item => {
       const isDiscount = item.menu_id === null || item.price < 0;
       const options = item.options || [];
       let price = item.price;
       let discountPercent = null;
-      if (!isDiscount && item.original_price != null && item.original_price !== item.price) {
+
+      if (wholeOrderPercent != null) {
+        // 전체 할인이 걸려 있던 주문이면, 항목별 개별 할인은 두지 않는다(원래 금액만 복원).
+        if (!isDiscount && item.original_price != null) price = item.original_price;
+      } else if (!isDiscount && item.original_price != null && item.original_price !== item.price) {
         const extraTotal = options.reduce((sum, o) => sum + (o.extra_price || 0), 0);
         const originalBase = item.original_price - extraTotal;
         const currentBase = item.price - extraTotal;
@@ -656,6 +671,7 @@ export default function App() {
         }
         price = item.original_price;
       }
+
       return {
         menu_id: item.menu_id,
         name: item.menus?.name || '할인/기타',
@@ -667,27 +683,12 @@ export default function App() {
       };
     });
 
-    // 상단 "전체 메뉴 할인" 배지/상태(discountPercent)를 복원할지 판단한다. DB에는 항목별 원래 금액만
-    // 저장되어 있어서 "전체 일괄 적용"이었는지 "메뉴별로 따로 건 것"이었는지 100% 확신할 수는 없지만,
-    // 할인 대상 메뉴가 2건 이상이고 전부 같은 할인율이면 "전체 적용"으로 보는 게 실제 사용 맥락상 맞다
-    // (메뉴가 1건뿐인 주문은 "전체"와 "그 메뉴 1건"이 근본적으로 구분이 안 되므로, 그 경우만 메뉴별로 표시해서
-    // 예전에 있었던 "메뉴 1건 할인일 뿐인데 전체 할인으로 잘못 표시되는" 문제를 피한다).
-    // 전체로 판단되면, 항목별 개별 표시와 중복/혼동되지 않도록 각 항목의 discountPercent는 비워서
-    // (해제도 상단 "해제" 버튼 하나로 전체가 한번에 풀리도록) 방금 막 전체 할인을 적용한 상태와 동일하게 만든다.
-    const discountable = order_items.filter(i => !i.isDiscount);
-    const uniformPercent = discountable.length >= 2 && discountable.every(i => i.discountPercent != null && i.discountPercent === discountable[0].discountPercent)
-      ? discountable[0].discountPercent
-      : null;
-    const finalItems = uniformPercent
-      ? order_items.map(item => (item.isDiscount ? item : { ...item, discountPercent: null }))
-      : order_items;
-
     return {
       ...order,
       created_at: order.created_at ? order.created_at.split('T')[0] : getTodayStr(),
       created_at_original: order.created_at,
-      discountPercent: uniformPercent,
-      order_items: finalItems
+      discountPercent: wholeOrderPercent,
+      order_items
     };
   };
 
@@ -755,6 +756,11 @@ export default function App() {
       order_type_id: orderType,
       payment_type: paymentType,
       total_amount: totalAmount,
+      // 이 주문 전체에 정률 할인이 걸려 있었는지를 orders 테이블에도 그대로 기록해둔다. order_items 쪽
+      // original_price만으로는 "전체 일괄 적용"인지 "메뉴 1건에만 건 것"인지 구분이 안 되고, 특히 메뉴가
+      // 1개뿐인 주문은 그 둘을 원천적으로 구분할 방법이 없어서, 나중에 수정 모달을 다시 열 때 이 값을
+      // 직접 확인해서 정확히 복원한다.
+      discount_percent: cartDiscountPercent || null,
       items: cart.map(item => ({
         menu_id: item.menu_id === 0 ? null : item.menu_id,
         quantity: item.quantity,
@@ -1047,6 +1053,9 @@ export default function App() {
       order_type_id: editingOrderModal.order_type_id,
       payment_type: editingOrderModal.payment_type,
       total_amount: totalAmount,
+      // 전체 할인 여부를 orders 테이블에도 그대로 기록해서, 다음에 이 주문을 다시 열었을 때
+      // "전체 일괄 적용"이었는지 "메뉴 1건에만 건 것"이었는지를 추측하지 않고 정확히 복원한다.
+      discount_percent: editingOrderModal.discountPercent || null,
       items: editingOrderModal.order_items.map(item => ({
         menu_id: item.menu_id === 0 ? null : item.menu_id,
         quantity: item.quantity,
