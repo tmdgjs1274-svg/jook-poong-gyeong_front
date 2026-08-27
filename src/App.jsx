@@ -757,8 +757,15 @@ export default function App() {
 
     try {
       setIsSubmitting(true);
-      await axios.post(`${API_BASE_URL}/orders`, payload);
-      showToast('✅ 주문이 정상적으로 저장되었습니다.');
+      const res = await axios.post(`${API_BASE_URL}/orders`, payload);
+      if (res.data?.discount_persisted === false) {
+        // order_items.original_price 컬럼이 아직 없어서 금액/저장 자체는 성공했지만, 정률 할인 정보(할인율,
+        // 원래 금액)는 저장되지 않았다는 뜻이다 - 저장이 "실패"한 게 아니라 이 부가 정보만 빠진 것이므로
+        // 조용히 넘어가지 않고 명확히 알려준다.
+        alert(`⚠️ 주문은 저장되었지만, 정률 할인 정보는 저장되지 않았습니다.\n\n${res.data.warning}`);
+      } else {
+        showToast('✅ 주문이 정상적으로 저장되었습니다.');
+      }
       setCart([]);
       setCartDiscountPercent(null);
     } catch (err) {
@@ -1043,8 +1050,16 @@ export default function App() {
     };
 
     try {
-      await axios.put(`${API_BASE_URL}/orders/${editingOrderModal.id}`, payload);
-      showToast('✅ 주문이 수정되었습니다.');
+      const res = await axios.put(`${API_BASE_URL}/orders/${editingOrderModal.id}`, payload);
+      if (res.data?.discount_persisted === false) {
+        // order_items.original_price 컬럼이 아직 없어서 금액/수정 자체는 성공했지만, 정률 할인 정보(할인율,
+        // 원래 금액)는 저장되지 않았다 - 그래서 이 주문을 다시 열어도 할인 배지가 안 보이고, 방금 적용/해제한
+        // 정률 할인 상태도 다음에 다시 열면 반영되어 있지 않다. 저장 자체가 실패한 게 아니므로 조용히 넘어가지
+        // 않고 원인을 명확히 알려준다.
+        alert(`⚠️ 주문은 수정되었지만, 정률 할인 정보는 저장되지 않았습니다.\n\n${res.data.warning}`);
+      } else {
+        showToast('✅ 주문이 수정되었습니다.');
+      }
       setEditingOrderModal(null);
       fetchDailyOrders(selectedDate);
       fetchDateList();
