@@ -39,14 +39,15 @@ export default function App() {
 
   // Vite 기본 템플릿의 index.css에는 흔히 "#root { max-width: 1280px; margin: 0 auto; padding: 2rem; }"가
   // 남아있는 경우가 많다. 이 컴포넌트 안에서 width: 100%/100vw를 줘도 부모(#root)가 이미 좁게 잡혀 있으면
-  // 실제로는 그 안에서만 렌더링되어 화면 일부만 쓰게 된다. PC에서 전체 화면 너비를 제대로 쓸 수 있도록
-  // 마운트 시 #root의 폭 제약을 직접 풀어준다.
+  // 실제로는 그 안에서만 렌더링되어 화면 일부만 쓰게 된다. 다만 초광폭 모니터에서 화면을 끝까지 꽉 채우면
+  // 오히려 시선이 분산되므로, 완전히 풀어주는 대신 기존(1280px)보다는 넓고 화면 끝까지는 아닌 적당한
+  // 너비(1680px)로 다시 잡고 좌우 여백은 auto margin으로 남긴다.
   useEffect(() => {
     const root = document.getElementById('root');
     if (root) {
-      root.style.maxWidth = 'none';
+      root.style.maxWidth = '1680px';
       root.style.width = '100%';
-      root.style.margin = '0';
+      root.style.margin = '0 auto';
       root.style.padding = '0';
       root.style.textAlign = 'left';
     }
