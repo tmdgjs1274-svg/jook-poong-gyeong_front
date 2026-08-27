@@ -566,8 +566,11 @@ export default function App() {
     showToast('정률 할인이 해제되었습니다.');
   };
 
-  // 카트의 특정 메뉴 1건에 정률 할인을 걸기 위해 팝업을 연다 (기존 정률할인 팝업을 그대로 재사용).
+  // 카트의 특정 메뉴 1건에 정률 할인을 걸기(또는 이미 걸려 있으면 % 값을 바꾸기) 위해 팝업을 연다
+  // (기존 정률할인 팝업을 그대로 재사용). 이미 할인이 걸려 있으면 현재 값을 입력란에 미리 채워준다.
   const openItemPercentDiscount = (cartKey) => {
+    const current = cart.find(i => i.cart_key === cartKey)?.discountPercent;
+    setPercentDiscountInput(current ? String(current) : '');
     setPercentDiscountTargetKey(cartKey);
     setIsPercentDiscountModalOpen(true);
   };
@@ -618,8 +621,12 @@ export default function App() {
     showToast('정률 할인이 해제되었습니다.');
   };
 
-  // 주문 수정 모달의 특정 메뉴 1건에 정률 할인을 걸기 위해 팝업을 연다 (카트와 동일한 팝업을 재사용).
+  // 주문 수정 모달의 특정 메뉴 1건에 정률 할인을 걸기(또는 이미 걸려 있으면 % 값을 바꾸기) 위해 팝업을 연다
+  // (카트와 동일한 팝업을 재사용). 전체 할인이 적용되어 있어서 이 항목이 이미 그 값을 갖고 있는 경우에도
+  // 이 버튼으로 다시 열 수 있어야 "메뉴별로 따로 걸기"로 전환할 수 있으므로, 배지 자체를 눌러도 열리게 한다.
   const openEditItemPercentDiscount = (idx) => {
+    const current = editingOrderModal?.order_items?.[idx]?.discountPercent;
+    setEditPercentDiscountInput(current ? String(current) : '');
     setEditPercentDiscountTargetIdx(idx);
     setIsEditPercentDiscountModalOpen(true);
   };
@@ -2020,7 +2027,7 @@ export default function App() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
-                    <th style={{ width: '29%' }}>메뉴</th><th style={{ width: '13%' }}>수량</th><th style={{ width: '23%' }}>할인</th><th style={{ width: '25%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
+                    <th style={{ width: '29%' }}>메뉴</th><th style={{ width: '13%' }}>수량</th><th style={{ width: '23%', paddingLeft: '6px' }}>할인</th><th style={{ width: '25%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2045,11 +2052,11 @@ export default function App() {
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
+                      <td style={{ verticalAlign: 'top', paddingTop: '8px', paddingLeft: '6px' }}>
                         {!item.isDiscount && (
                           item.discountPercent ? (
                             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: '3px' }}>
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>％{item.discountPercent}%</span>
+                              <button onClick={() => openItemPercentDiscount(item.cart_key)} title="할인율 변경" style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', border: 'none', cursor: 'pointer' }}>％{item.discountPercent}%</button>
                               <button onClick={() => releaseCartItemDiscount(item.cart_key)} style={{ padding: '2px 4px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>해제</button>
                             </div>
                           ) : (
@@ -3129,7 +3136,7 @@ export default function App() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '320px' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
-                    <th style={{ width: '30%' }}>상품명</th><th style={{ width: '16%' }}>수량</th><th style={{ width: '22%' }}>할인</th><th style={{ width: '22%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
+                    <th style={{ width: '30%' }}>상품명</th><th style={{ width: '16%' }}>수량</th><th style={{ width: '22%', paddingLeft: '6px' }}>할인</th><th style={{ width: '22%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3164,11 +3171,11 @@ export default function App() {
                           <span>1</span>
                         )}
                       </td>
-                      <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
+                      <td style={{ verticalAlign: 'top', paddingTop: '8px', paddingLeft: '6px' }}>
                         {!item.isDiscount && (
                           item.discountPercent ? (
                             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: '3px' }}>
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>％{item.discountPercent}%</span>
+                              <button onClick={() => openEditItemPercentDiscount(idx)} title="할인율 변경" style={{ fontSize: '10px', fontWeight: 'bold', color: '#6d28d9', background: '#f5f3ff', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', border: 'none', cursor: 'pointer' }}>％{item.discountPercent}%</button>
                               <button onClick={() => releaseEditItemDiscount(idx)} style={{ padding: '2px 4px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>해제</button>
                             </div>
                           ) : (
