@@ -2001,10 +2001,10 @@ export default function App() {
 
       {/* 1. POS 영역 */}
       {activeTab === 'pos' && (
-        <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row', boxSizing: 'border-box', width: '100%', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row', boxSizing: 'border-box', width: '100%', alignItems: isMobile ? 'flex-start' : 'stretch' }}>
 
-          {/* 장바구니 및 주문 입력 패널 */}
-          <div style={{ width: isMobile ? '100%' : '500px', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+          {/* 장바구니 및 주문 입력 패널 - PC에서는 오른쪽 메뉴 패널과 높이를 맞춰(alignItems: stretch) 세로 공간을 꽉 채운다 */}
+          <div style={{ width: isMobile ? '100%' : '640px', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
             <div style={{ marginBottom: cartDiscountPercent ? '8px' : '14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
@@ -2091,11 +2091,11 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ width: '100%', maxHeight: '240px', overflowY: 'auto', marginBottom: '14px', boxSizing: 'border-box' }}>
+            <div style={{ width: '100%', flex: '1 1 auto', minHeight: isMobile ? 'auto' : '0', maxHeight: isMobile ? '240px' : 'none', overflowY: 'auto', marginBottom: '14px', boxSizing: 'border-box' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
-                    <th style={{ width: '29%' }}>메뉴</th><th style={{ width: '13%' }}>수량</th><th style={{ width: '23%', paddingLeft: '6px' }}>할인</th><th style={{ width: '25%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
+                    <th style={{ width: '34%' }}>메뉴</th><th style={{ width: '11%' }}>수량</th><th style={{ width: '19%', paddingLeft: '6px' }}>할인</th><th style={{ width: '26%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
