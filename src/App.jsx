@@ -2106,9 +2106,9 @@ export default function App() {
                         {(item.options || []).map((o, i) => {
                           const optQty = o.quantity || 1;
                           return (
-                            <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                              <span>– {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}</span>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '20px', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '4px' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>– {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
                                 <button onClick={() => updateCartOptionQuantity(item.cart_key, i, -1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>-</button>
                                 <span style={{ fontWeight: 'bold', minWidth: '10px', textAlign: 'center' }}>{optQty}</span>
                                 <button onClick={() => updateCartOptionQuantity(item.cart_key, i, 1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>+</button>
@@ -3229,9 +3229,9 @@ export default function App() {
                         {(item.options || []).map((o, i) => {
                           const optQty = o.quantity || 1;
                           return (
-                            <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                              <span>– {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}</span>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '20px', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '4px' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>– {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
                                 <button onClick={() => updateEditOptionQuantity(idx, i, -1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>-</button>
                                 <span style={{ fontWeight: 'bold', minWidth: '10px', textAlign: 'center' }}>{optQty}</span>
                                 <button onClick={() => updateEditOptionQuantity(idx, i, 1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>+</button>
