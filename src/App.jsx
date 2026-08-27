@@ -453,7 +453,8 @@ export default function App() {
             group_name: g.name,
             option_id: opt.id,
             option_name: opt.name,
-            extra_price: opt.extra_price || 0
+            extra_price: opt.extra_price || 0,
+            quantity: 1
           });
         }
       });
@@ -510,7 +511,8 @@ export default function App() {
   };
 
   // 옵션 추가금액 합계 - 정률 할인 계산 시 옵션 금액은 제외하기 위해 사용한다.
-  const getItemExtraTotal = (item) => (item.options || []).reduce((sum, o) => sum + (o.extra_price || 0), 0);
+  // 옵션별 수량(quantity, 기본 1)만큼 곱해서 합산한다.
+  const getItemExtraTotal = (item) => (item.options || []).reduce((sum, o) => sum + (o.extra_price || 0) * (o.quantity || 1), 0);
 
   // 카트/주문수정 항목 1건에 정률(%) 할인을 적용한 최종 단가를 계산한다.
   // - 할인 항목(item.isDiscount) 자체에는 적용하지 않는다.
@@ -636,6 +638,26 @@ export default function App() {
     showToast('정률 할인이 해제되었습니다.');
   };
 
+  // 주문 수정 모달에서 특정 상품(itemIdx)의 특정 옵션(optionIndex) 수량을 조정한다.
+  // 카트의 updateCartOptionQuantity와 동일하게, 옵션 합계금액 변경분을 item.price에도 함께 보정한다.
+  const updateEditOptionQuantity = (itemIdx, optionIndex, change) => {
+    setEditingOrderModal(prev => ({
+      ...prev,
+      order_items: prev.order_items.map((it, i) => {
+        if (i !== itemIdx) return it;
+        const options = it.options || [];
+        const opt = options[optionIndex];
+        if (!opt) return it;
+        const newQty = (opt.quantity || 1) + change;
+        if (newQty < 1) return it;
+        const oldExtra = (opt.extra_price || 0) * (opt.quantity || 1);
+        const newExtra = (opt.extra_price || 0) * newQty;
+        const newOptions = options.map((o, j) => j === optionIndex ? { ...o, quantity: newQty } : o);
+        return { ...it, options: newOptions, price: it.price - oldExtra + newExtra };
+      })
+    }));
+  };
+
   // 저장된 주문(order)을 "주문 상세 수정" 모달 상태로 변환한다.
   //
   // 전체(주문 단위) 할인 여부는 order.discount_percent 컬럼을 그대로 신뢰한다 - 이 컬럼이 채워져 있다는 것은
@@ -662,7 +684,7 @@ export default function App() {
         // 전체 할인이 걸려 있던 주문이면, 항목별 개별 할인은 두지 않는다(원래 금액만 복원).
         if (!isDiscount && item.original_price != null) price = item.original_price;
       } else if (!isDiscount && item.original_price != null && item.original_price !== item.price) {
-        const extraTotal = options.reduce((sum, o) => sum + (o.extra_price || 0), 0);
+        const extraTotal = options.reduce((sum, o) => sum + (o.extra_price || 0) * (o.quantity || 1), 0);
         const originalBase = item.original_price - extraTotal;
         const currentBase = item.price - extraTotal;
         if (originalBase > 0) {
@@ -742,6 +764,24 @@ export default function App() {
 
   const removeFromCart = (cartKey) => {
     setCart(prev => prev.filter(item => item.cart_key !== cartKey));
+  };
+
+  // 장바구니 항목의 특정 옵션 수량을 조정한다.
+  // item.price는 "메뉴 금액 + 옵션 합계금액"이 미리 계산되어 담기는 구조라서, 옵션 수량이 바뀌면
+  // 변경된 만큼(이전 옵션 합계 → 새 옵션 합계 차이)을 item.price에도 함께 보정해준다.
+  const updateCartOptionQuantity = (cartKey, optionIndex, change) => {
+    setCart(prev => prev.map(item => {
+      if (item.cart_key !== cartKey) return item;
+      const options = item.options || [];
+      const opt = options[optionIndex];
+      if (!opt) return item;
+      const newQty = (opt.quantity || 1) + change;
+      if (newQty < 1) return item;
+      const oldExtra = (opt.extra_price || 0) * (opt.quantity || 1);
+      const newExtra = (opt.extra_price || 0) * newQty;
+      const newOptions = options.map((o, i) => i === optionIndex ? { ...o, quantity: newQty } : o);
+      return { ...item, options: newOptions, price: item.price - oldExtra + newExtra };
+    }));
   };
 
   const handleOrder = async () => {
@@ -2063,11 +2103,19 @@ export default function App() {
                     <tr key={item.cart_key} style={{ borderBottom: '1px solid #f8fafc', minHeight: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
                       <td style={{ fontWeight: 'bold', verticalAlign: 'top', paddingTop: '8px', paddingBottom: '8px' }}>
                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                        {(item.options || []).map((o, i) => (
-                          <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px' }}>
-                            – {o.option_name}{o.extra_price > 0 ? ` (+${o.extra_price.toLocaleString()}원)` : ''}
-                          </div>
-                        ))}
+                        {(item.options || []).map((o, i) => {
+                          const optQty = o.quantity || 1;
+                          return (
+                            <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                              <span>– {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                <button onClick={() => updateCartOptionQuantity(item.cart_key, i, -1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>-</button>
+                                <span style={{ fontWeight: 'bold', minWidth: '10px', textAlign: 'center' }}>{optQty}</span>
+                                <button onClick={() => updateCartOptionQuantity(item.cart_key, i, 1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>+</button>
+                              </span>
+                            </div>
+                          );
+                        })}
                       </td>
                       <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
                         {!item.isDiscount ? (
@@ -3178,11 +3226,19 @@ export default function App() {
                     <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', color: item.isDiscount ? '#dc2626' : '#333' }}>
                       <td style={{ fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px', paddingBottom: '8px' }}>
                         <div>{item.name}</div>
-                        {(item.options || []).map((o, i) => (
-                          <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px' }}>
-                            – {o.option_name}{o.extra_price > 0 ? ` (+${o.extra_price.toLocaleString()}원)` : ''}
-                          </div>
-                        ))}
+                        {(item.options || []).map((o, i) => {
+                          const optQty = o.quantity || 1;
+                          return (
+                            <div key={i} style={{ fontSize: '10px', fontWeight: 'normal', color: '#64748b', paddingLeft: '10px', marginTop: '2px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                              <span>– {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                <button onClick={() => updateEditOptionQuantity(idx, i, -1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>-</button>
+                                <span style={{ fontWeight: 'bold', minWidth: '10px', textAlign: 'center' }}>{optQty}</span>
+                                <button onClick={() => updateEditOptionQuantity(idx, i, 1)} style={{ padding: '0 4px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '9px', lineHeight: '14px', color: '#334155' }}>+</button>
+                              </span>
+                            </div>
+                          );
+                        })}
                       </td>
                       <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
                         {!item.isDiscount ? (
