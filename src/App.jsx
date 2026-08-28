@@ -2074,7 +2074,7 @@ export default function App() {
           {/* 장바구니 및 주문 입력 패널 - PC에서는 뷰포트 높이에 맞춰 패널 자체 높이를 고정하고(그래야 아래 주문
               항목 목록의 flex:1이 실제로 "남는 공간만큼"으로 제한되어 내부 스크롤이 걸린다), 항목이 아무리
               많아져도 "결제 및 주문 저장" 버튼은 항상 패널 하단에 고정되어 보이도록 한다. */}
-          <div style={{ width: isMobile ? '100%' : '480px', height: isMobile ? 'auto' : 'calc(100vh - 104px)', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+          <div style={{ width: isMobile ? '100%' : '430px', height: isMobile ? 'auto' : 'calc(100vh - 104px)', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
             <div style={{ marginBottom: cartDiscountPercent ? '8px' : '14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
