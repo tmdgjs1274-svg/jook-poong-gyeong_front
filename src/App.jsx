@@ -2215,27 +2215,29 @@ export default function App() {
             </div>
 
             <div style={{ width: '100%', flex: '1 1 auto', minHeight: isMobile ? 'auto' : '0', maxHeight: isMobile ? '240px' : 'none', overflowY: 'auto', marginBottom: '14px', boxSizing: 'border-box' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
-                    <th style={{ width: '41%' }}>메뉴</th><th style={{ width: '10%' }}>수량</th><th style={{ width: '15%', paddingLeft: '6px' }}>할인</th><th style={{ width: '24%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map((item) => (
-                    <tr key={item.cart_key} style={{ borderBottom: '1px solid #f8fafc', minHeight: '40px', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold', verticalAlign: 'top', paddingTop: '8px', paddingBottom: '8px' }}>
-                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                        {(item.options || []).map((o, i) => {
-                          const optQty = o.quantity || 1;
-                          return (
-                            <div key={i} style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', paddingLeft: '14px', marginTop: '6px' }}>
-                              – {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}
-                            </div>
-                          );
-                        })}
-                      </td>
-                      <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
+              {/* 예전엔 <table>이라 "메뉴"/"수량" 칸을 각자 독립적으로 쌓았는데, 옵션명이 폭이 좁아져 두 줄로
+                  줄바꿈되면 그 칸만 세로로 길어지고 옆의 "수량" 칸은 그대로라서 아래로 갈수록 서로 밀리는
+                  단차가 생겼다. CSS Grid로 바꿔서 메뉴 1건/옵션 1건마다 "한 행"(메뉴/수량/할인/금액/삭제 5칸)을
+                  같이 묶어주면, 그 행 안에서 어느 칸이 줄바꿈으로 늘어나도 같은 행의 나머지 칸들이 자동으로
+                  같은 높이를 공유해서 항상 나란히 정렬된다. */}
+              <div style={{ display: 'grid', gridTemplateColumns: '41fr 10fr 15fr 24fr 10fr', columnGap: '4px', width: '100%', fontSize: '13px', alignItems: 'start' }}>
+                <div style={{ gridColumn: '1 / 2', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center' }}>메뉴</div>
+                <div style={{ gridColumn: '2 / 3', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center' }}>수량</div>
+                <div style={{ gridColumn: '3 / 4', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center', paddingLeft: '6px' }}>할인</div>
+                <div style={{ gridColumn: '4 / 5', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>금액</div>
+                <div style={{ gridColumn: '5 / 6', borderBottom: '2px solid #f1f5f9', height: '32px' }} />
+
+                {cart.map((item) => {
+                  const opts = item.options || [];
+                  const rowTextColor = item.isDiscount ? '#dc2626' : '#333';
+                  const mainBorderBottom = opts.length === 0 ? '1px solid #f8fafc' : 'none';
+                  const mainPaddingBottom = opts.length === 0 ? '8px' : '2px';
+                  return (
+                    <React.Fragment key={item.cart_key}>
+                      <div style={{ fontWeight: 'bold', color: rowTextColor, paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.name}
+                      </div>
+                      <div style={{ paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         {!item.isDiscount ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                             <button onClick={() => updateQuantity(item.cart_key, -1)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}>-</button>
@@ -2245,18 +2247,8 @@ export default function App() {
                         ) : (
                           <span>1</span>
                         )}
-                        {(item.options || []).map((o, i) => {
-                          const optQty = o.quantity || 1;
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '2px', marginTop: '6px' }}>
-                              <button onClick={() => updateCartOptionQuantity(item.cart_key, i, -1)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>-</button>
-                              <span style={{ fontWeight: 'bold', fontSize: '12px', minWidth: '14px', textAlign: 'center' }}>{optQty}</span>
-                              <button onClick={() => updateCartOptionQuantity(item.cart_key, i, 1)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>+</button>
-                            </div>
-                          );
-                        })}
-                      </td>
-                      <td style={{ verticalAlign: 'top', paddingTop: '8px', paddingLeft: '6px' }}>
+                      </div>
+                      <div style={{ paddingTop: '8px', paddingLeft: '6px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         {!item.isDiscount && (
                           item.discountPercent ? (
                             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: '3px' }}>
@@ -2267,8 +2259,8 @@ export default function App() {
                             <button onClick={() => openItemPercentDiscount(item.cart_key)} style={{ padding: '3px 6px', background: '#ede9fe', color: '#6d28d9', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>％ 할인</button>
                           )
                         )}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>
+                      </div>
+                      <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         {(() => {
                           const discountedUnit = getDiscountedItemPrice(item, cartDiscountPercent);
                           if (discountedUnit === item.price) return `${(item.price * item.quantity).toLocaleString()}원`;
@@ -2279,14 +2271,36 @@ export default function App() {
                             </>
                           );
                         })()}
-                      </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: '8px' }}>
+                      </div>
+                      <div style={{ textAlign: 'center', paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         <button onClick={() => removeFromCart(item.cart_key)} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>X</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+
+                      {opts.map((o, i) => {
+                        const optQty = o.quantity || 1;
+                        const isLastOpt = i === opts.length - 1;
+                        const optBorderBottom = isLastOpt ? '1px solid #f8fafc' : 'none';
+                        const optPaddingBottom = isLastOpt ? '8px' : '2px';
+                        return (
+                          <React.Fragment key={i}>
+                            <div style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', paddingLeft: '14px', paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }}>
+                              – {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }}>
+                              <button onClick={() => updateCartOptionQuantity(item.cart_key, i, -1)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>-</button>
+                              <span style={{ fontWeight: 'bold', fontSize: '12px', minWidth: '14px', textAlign: 'center' }}>{optQty}</span>
+                              <button onClick={() => updateCartOptionQuantity(item.cart_key, i, 1)} style={{ padding: '2px 5px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>+</button>
+                            </div>
+                            <div style={{ paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }} />
+                            <div style={{ paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }} />
+                            <div style={{ paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }} />
+                          </React.Fragment>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
 
             <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '14px' }}>
@@ -3377,27 +3391,26 @@ export default function App() {
 
             <div style={{ marginBottom: '16px', overflowX: 'auto' }}>
               <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>주문 상품 목록</label>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '320px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', textAlign: 'left', height: '32px' }}>
-                    <th style={{ width: '30%' }}>상품명</th><th style={{ width: '16%' }}>수량</th><th style={{ width: '22%', paddingLeft: '6px' }}>할인</th><th style={{ width: '22%', textAlign: 'right' }}>금액</th><th style={{ width: '10%', textAlign: 'center' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {editingOrderModal.order_items.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', color: item.isDiscount ? '#dc2626' : '#333' }}>
-                      <td style={{ fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px', paddingBottom: '8px' }}>
-                        <div>{item.name}</div>
-                        {(item.options || []).map((o, i) => {
-                          const optQty = o.quantity || 1;
-                          return (
-                            <div key={i} style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', paddingLeft: '14px', marginTop: '6px' }}>
-                              – {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}
-                            </div>
-                          );
-                        })}
-                      </td>
-                      <td style={{ verticalAlign: 'top', paddingTop: '8px' }}>
+              {/* 주문입력 카트와 동일하게, 옵션명 줄바꿈으로 "메뉴"/"수량" 칸이 서로 밀리는 단차가 생기지 않도록
+                  <table> 대신 CSS Grid로 메뉴 1건/옵션 1건마다 한 행(5칸)씩 묶어서 정렬한다. */}
+              <div style={{ display: 'grid', gridTemplateColumns: '30fr 16fr 22fr 22fr 10fr', columnGap: '4px', width: '100%', minWidth: '320px', fontSize: '12px', alignItems: 'start' }}>
+                <div style={{ gridColumn: '1 / 2', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center' }}>상품명</div>
+                <div style={{ gridColumn: '2 / 3', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center' }}>수량</div>
+                <div style={{ gridColumn: '3 / 4', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center', paddingLeft: '6px' }}>할인</div>
+                <div style={{ gridColumn: '4 / 5', borderBottom: '2px solid #f1f5f9', color: '#64748b', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>금액</div>
+                <div style={{ gridColumn: '5 / 6', borderBottom: '2px solid #f1f5f9', height: '32px' }} />
+
+                {editingOrderModal.order_items.map((item, idx) => {
+                  const opts = item.options || [];
+                  const rowTextColor = item.isDiscount ? '#dc2626' : '#333';
+                  const mainBorderBottom = opts.length === 0 ? '1px solid #f8fafc' : 'none';
+                  const mainPaddingBottom = opts.length === 0 ? '8px' : '2px';
+                  return (
+                    <React.Fragment key={idx}>
+                      <div style={{ fontWeight: 'bold', fontSize: '12px', color: rowTextColor, paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
+                        {item.name}
+                      </div>
+                      <div style={{ paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         {!item.isDiscount ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                             <button onClick={() => {
@@ -3417,18 +3430,8 @@ export default function App() {
                         ) : (
                           <span>1</span>
                         )}
-                        {(item.options || []).map((o, i) => {
-                          const optQty = o.quantity || 1;
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
-                              <button onClick={() => updateEditOptionQuantity(idx, i, -1)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>-</button>
-                              <span style={{ fontWeight: 'bold', fontSize: '12px', minWidth: '14px', textAlign: 'center' }}>{optQty}</span>
-                              <button onClick={() => updateEditOptionQuantity(idx, i, 1)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>+</button>
-                            </div>
-                          );
-                        })}
-                      </td>
-                      <td style={{ verticalAlign: 'top', paddingTop: '8px', paddingLeft: '6px' }}>
+                      </div>
+                      <div style={{ paddingTop: '8px', paddingLeft: '6px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         {!item.isDiscount && (
                           item.discountPercent ? (
                             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: '3px' }}>
@@ -3439,8 +3442,8 @@ export default function App() {
                             <button onClick={() => openEditItemPercentDiscount(idx)} style={{ padding: '3px 6px', background: '#ede9fe', color: '#6d28d9', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>％ 할인</button>
                           )
                         )}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', verticalAlign: 'top', paddingTop: '8px' }}>
+                      </div>
+                      <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '12px', paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         {(() => {
                           const discountedUnit = getDiscountedItemPrice(item, editingOrderModal.discountPercent);
                           if (discountedUnit === item.price) return `${(item.price * item.quantity).toLocaleString()}원`;
@@ -3451,19 +3454,41 @@ export default function App() {
                             </>
                           );
                         })()}
-                      </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: '8px' }}>
+                      </div>
+                      <div style={{ textAlign: 'center', paddingTop: '8px', paddingBottom: mainPaddingBottom, borderBottom: mainBorderBottom }}>
                         <button onClick={() => {
                           setEditingOrderModal(prev => ({
                             ...prev,
                             order_items: prev.order_items.filter((_, i) => i !== idx)
                           }));
                         }} style={{ padding: '3px 6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>X</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+
+                      {opts.map((o, i) => {
+                        const optQty = o.quantity || 1;
+                        const isLastOpt = i === opts.length - 1;
+                        const optBorderBottom = isLastOpt ? '1px solid #f8fafc' : 'none';
+                        const optPaddingBottom = isLastOpt ? '8px' : '2px';
+                        return (
+                          <React.Fragment key={i}>
+                            <div style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', paddingLeft: '14px', paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }}>
+                              – {o.option_name}{o.extra_price > 0 ? ` (+${(o.extra_price * optQty).toLocaleString()}원)` : ''}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }}>
+                              <button onClick={() => updateEditOptionQuantity(idx, i, -1)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>-</button>
+                              <span style={{ fontWeight: 'bold', fontSize: '12px', minWidth: '14px', textAlign: 'center' }}>{optQty}</span>
+                              <button onClick={() => updateEditOptionQuantity(idx, i, 1)} style={{ padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>+</button>
+                            </div>
+                            <div style={{ paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }} />
+                            <div style={{ paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }} />
+                            <div style={{ paddingBottom: optPaddingBottom, borderBottom: optBorderBottom }} />
+                          </React.Fragment>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: '2px solid #f1f5f9', paddingTop: '12px' }}>
