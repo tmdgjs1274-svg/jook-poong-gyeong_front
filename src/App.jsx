@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 export default function App() {
@@ -56,6 +56,59 @@ export default function App() {
     document.body.style.maxWidth = 'none';
     document.body.style.margin = '0';
   }, []);
+
+  // ===== 주문입력 화면 - 주문 내역/메뉴 목록 패널 사이 스플리터로 폭을 직접 조절할 수 있게 한다 =====
+  // 조절한 폭은 이 브라우저(기기)에만 저장한다(localStorage) - 여러 사람이 같은 계정으로 서로 다른
+  // PC/태블릿에서 접속해도 각자 자기 화면에서 마지막으로 맞춘 폭을 그대로 유지하고, 서로 영향을 주지 않는다.
+  const CART_PANEL_WIDTH_KEY = 'jgg_pos_cart_panel_width';
+  const CART_PANEL_MIN_WIDTH = 320;
+  const CART_PANEL_MAX_WIDTH = 900;
+  const [cartPanelWidth, setCartPanelWidth] = useState(430);
+  const [isResizingCartPanel, setIsResizingCartPanel] = useState(false);
+  const posRowRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(CART_PANEL_WIDTH_KEY));
+      if (saved && saved >= CART_PANEL_MIN_WIDTH && saved <= CART_PANEL_MAX_WIDTH) {
+        setCartPanelWidth(saved);
+      }
+    } catch (e) {
+      // localStorage를 쓸 수 없는 환경(프라이빗 모드 등)이면 그냥 기본값(430px)을 쓴다.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingCartPanel) return;
+    const handleMove = (e) => {
+      if (!posRowRef.current) return;
+      const rect = posRowRef.current.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const next = Math.min(CART_PANEL_MAX_WIDTH, Math.max(CART_PANEL_MIN_WIDTH, clientX - rect.left));
+      setCartPanelWidth(next);
+    };
+    const handleUp = () => {
+      setIsResizingCartPanel(false);
+      setCartPanelWidth(w => {
+        try { localStorage.setItem(CART_PANEL_WIDTH_KEY, String(Math.round(w))); } catch (e) {}
+        return w;
+      });
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingCartPanel]);
 
   const [activeTab, setActiveTab] = useState('pos');
   const [menus, setMenus] = useState([]);
@@ -2069,12 +2122,12 @@ export default function App() {
 
       {/* 1. POS 영역 */}
       {activeTab === 'pos' && (
-        <div style={{ display: 'flex', gap: '16px', flexDirection: isMobile ? 'column' : 'row', boxSizing: 'border-box', width: '100%', alignItems: isMobile ? 'flex-start' : 'stretch' }}>
+        <div ref={posRowRef} style={{ display: 'flex', gap: isMobile ? '16px' : '0px', flexDirection: isMobile ? 'column' : 'row', boxSizing: 'border-box', width: '100%', alignItems: isMobile ? 'flex-start' : 'stretch' }}>
 
           {/* 장바구니 및 주문 입력 패널 - PC에서는 뷰포트 높이에 맞춰 패널 자체 높이를 고정하고(그래야 아래 주문
               항목 목록의 flex:1이 실제로 "남는 공간만큼"으로 제한되어 내부 스크롤이 걸린다), 항목이 아무리
               많아져도 "결제 및 주문 저장" 버튼은 항상 패널 하단에 고정되어 보이도록 한다. */}
-          <div style={{ width: isMobile ? '100%' : '430px', height: isMobile ? 'auto' : 'calc(100vh - 104px)', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+          <div style={{ width: isMobile ? '100%' : `${cartPanelWidth}px`, height: isMobile ? 'auto' : 'calc(100vh - 104px)', flexShrink: 0, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
             <div style={{ marginBottom: cartDiscountPercent ? '8px' : '14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ margin: 0, fontSize: '16px' }}>주문 내역</h2>
@@ -2260,6 +2313,18 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {/* 주문 내역 / 메뉴 목록 사이 스플리터 - 드래그해서 주문 내역 패널 폭을 조절한다. 모바일(세로 배치)에서는 의미가 없어 숨긴다. */}
+          {!isMobile && (
+            <div
+              onMouseDown={() => setIsResizingCartPanel(true)}
+              onTouchStart={() => setIsResizingCartPanel(true)}
+              title="드래그해서 너비 조절"
+              style={{ width: '16px', flexShrink: 0, alignSelf: 'stretch', cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}
+            >
+              <div style={{ width: '4px', height: '48px', borderRadius: '2px', background: isResizingCartPanel ? '#2563eb' : '#e2e8f0' }} />
+            </div>
+          )}
 
           {/* 메뉴 선택 패널 */}
           <div style={{ flex: 1, background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', boxSizing: 'border-box', width: '100%' }}>
