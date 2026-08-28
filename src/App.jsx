@@ -96,6 +96,7 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState('');   // 'YYYY' - 데이터가 존재하는 연도 중에서만 선택
   const [rangeOrders, setRangeOrders] = useState([]);      // 월단위/연단위 조회 시 그 기간에 해당하는 주문 전체
   const [drillDownDate, setDrillDownDate] = useState(null); // 월단위 추이 차트에서 클릭한 특정 일자 (조회 전용)
+  const [monthlyChartDaysMode, setMonthlyChartDaysMode] = useState('all'); // 월단위 추이 차트 - 'all'(전체일 조회) | 'salesOnly'(매출일만 조회)
 
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
@@ -1406,6 +1407,12 @@ export default function App() {
     });
   })();
 
+  // "매출일만 조회"일 때는 그 날 주문이 하나도 없던 날짜(count === 0)는 아예 목록에서 빼서,
+  // 차트에도 표에도 매출이 실제로 있던 날짜만 보이게 한다. "전체일 조회"는 기존처럼 말일까지 다 보여준다.
+  const monthlyChartDisplayData = monthlyChartDaysMode === 'salesOnly'
+    ? monthlyChartData.filter(d => d.count > 0)
+    : monthlyChartData;
+
   // 연단위: 선택된 연도의 월별(1월~12월) 건수/금액 집계
   const yearlyChartData = (() => {
     if (salesViewMode !== 'yearly' || !selectedYear) return [];
@@ -1595,7 +1602,7 @@ export default function App() {
 
     const useMobileLayout = clickable && isMobile;
     // 일단위(월간 상세) 라벨은 "13(수)"처럼 요일이 붙어 글자가 길어지므로, 겹치지 않도록 칸 폭을 더 넓게 잡는다.
-    const W = Math.max(320, data.length * (isDailyKey ? 52 : 32));
+    const W = Math.max(320, data.length * (isDailyKey ? 56 : 32));
     const H = 200;
     const padX = 16, padTop = 14, padBottom = 30;
     const plotW = W - padX * 2, plotH = H - padTop - padBottom;
@@ -1637,7 +1644,10 @@ export default function App() {
         </div>
 
         <div style={{ overflowX: 'auto', width: '100%', boxSizing: 'border-box' }}>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: `${Math.min(W, 320)}px`, height: '200px', display: 'block' }}>
+          {/* SVG의 실제 폭(W)이 화면보다 넓을 때, width:100%만 있으면 뷰박스가 그대로 눌려 축소되면서 글자가
+              작아진다. minWidth를 W로 고정해서 축소되지 않게 하고, 대신 바깥 div의 overflowX:auto로
+              가로 스크롤이 생기게 한다 (라벨 글자 크기가 항상 유지되도록). */}
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: `${W}px`, minWidth: `${W}px`, height: '200px', display: 'block' }}>
             <line x1={padX} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="#e2e8f0" strokeWidth="1" />
             {visibleSeries.map(name => {
               const color = seriesColor(name);
@@ -1719,7 +1729,7 @@ export default function App() {
               }
               const isSelected = clickable && selectedKey === d.key;
               return (
-                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={isDailyKey ? (data.length > 20 ? 13 : 20) : (data.length > 20 ? 6.5 : 10)} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
+                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={isDailyKey ? (data.length > 20 ? 15 : 20) : (data.length > 20 ? 6.5 : 10)} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
                   {label}
                 </text>
               );
@@ -2492,8 +2502,30 @@ export default function App() {
 
                 {renderSalesTotalCards(filteredRangeOrders, { showCount: false })}
 
-                <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>일자별 추이</h3>
-                {renderTrendChart(monthlyChartData, rangeOrders, {
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '14px', margin: 0 }}>일자별 추이</h3>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {[{ key: 'all', label: '전체일 조회' }, { key: 'salesOnly', label: '매출일만 조회' }].map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setMonthlyChartDaysMode(opt.key)}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '14px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          background: monthlyChartDaysMode === opt.key ? '#2563eb' : '#f1f5f9',
+                          color: monthlyChartDaysMode === opt.key ? '#fff' : '#64748b'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {renderTrendChart(monthlyChartDisplayData, rangeOrders, {
                   clickable: true,
                   selectedKey: drillDownDate,
                   onSelect: (key) => setDrillDownDate(prev => (prev === key ? null : key))
