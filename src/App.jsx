@@ -97,6 +97,7 @@ export default function App() {
   const [rangeOrders, setRangeOrders] = useState([]);      // 월단위/연단위 조회 시 그 기간에 해당하는 주문 전체
   const [drillDownDate, setDrillDownDate] = useState(null); // 월단위 추이 차트에서 클릭한 특정 일자 (조회 전용)
   const [monthlyChartDaysMode, setMonthlyChartDaysMode] = useState('all'); // 월단위 추이 차트 - 'all'(전체일 조회) | 'salesOnly'(매출일만 조회)
+  const [showChartValues, setShowChartValues] = useState(false); // 추이 차트 점 위에 금액 숫자를 함께 표시할지 여부
 
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
@@ -1604,7 +1605,9 @@ export default function App() {
     // 일단위(월간 상세) 라벨은 "13(수)"처럼 요일이 붙어 글자가 길어지므로, 겹치지 않도록 칸 폭을 더 넓게 잡는다.
     const W = Math.max(320, data.length * (isDailyKey ? 56 : 32));
     const H = 200;
-    const padX = 16, padTop = 14, padBottom = 30;
+    // 일단위 라벨은 "27(목)"처럼 양옆으로 튀어나오는 폭이 있어서, 맨 끝 지점의 라벨이 잘리지 않도록
+    // 좌우 여백(padX)을 더 넉넉하게 잡는다.
+    const padX = isDailyKey ? 26 : 16, padTop = 14, padBottom = 30;
     const plotW = W - padX * 2, plotH = H - padTop - padBottom;
     const xStep = data.length > 1 ? plotW / (data.length - 1) : 0;
     const xFor = (i) => padX + i * xStep;
@@ -1626,7 +1629,7 @@ export default function App() {
         )}
 
         {/* 범례 겸 노출/미노출 필터 - 눌러서 해제하면 그 선이 사라지고, 다시 누르면 보인다. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
           {seriesNames.map(name => {
             const isHidden = hiddenChartSeries.includes(name);
             const color = seriesColor(name);
@@ -1641,6 +1644,10 @@ export default function App() {
               </button>
             );
           })}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 'bold', color: '#64748b', cursor: 'pointer', marginLeft: 'auto' }}>
+            <input type="checkbox" checked={showChartValues} onChange={e => setShowChartValues(e.target.checked)} style={{ cursor: 'pointer' }} />
+            데이터 보기
+          </label>
         </div>
 
         <div style={{ overflowX: 'auto', width: '100%', boxSizing: 'border-box' }}>
@@ -1671,15 +1678,21 @@ export default function App() {
                     <polyline key={si} points={seg.join(' ')} fill="none" stroke={color} strokeWidth={name === '전체' ? 2.5 : 1.8} strokeLinejoin="round" strokeLinecap="round" />
                   ))}
                   {data.map((d, i) => hasData[d.key][name] && (
-                    <circle
-                      key={d.key}
-                      cx={xFor(i)}
-                      cy={yFor(totals[d.key][name])}
-                      r={name === '전체' ? 3.2 : 2.2}
-                      fill={color}
-                    >
-                      <title>{`${d.label} · ${name} · ${totals[d.key][name].toLocaleString()}원`}</title>
-                    </circle>
+                    <React.Fragment key={d.key}>
+                      <circle
+                        cx={xFor(i)}
+                        cy={yFor(totals[d.key][name])}
+                        r={name === '전체' ? 3.2 : 2.2}
+                        fill={color}
+                      >
+                        <title>{`${d.label} · ${name} · ${totals[d.key][name].toLocaleString()}원`}</title>
+                      </circle>
+                      {showChartValues && (
+                        <text x={xFor(i)} y={yFor(totals[d.key][name]) - 6} textAnchor="middle" fontSize="9" fontWeight="bold" fill={color}>
+                          {totals[d.key][name].toLocaleString()}
+                        </text>
+                      )}
+                    </React.Fragment>
                   ))}
                 </g>
               );
@@ -1729,7 +1742,7 @@ export default function App() {
               }
               const isSelected = clickable && selectedKey === d.key;
               return (
-                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={isDailyKey ? (data.length > 20 ? 15 : 20) : (data.length > 20 ? 6.5 : 10)} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
+                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={isDailyKey ? (data.length > 20 ? 13 : 15) : (data.length > 20 ? 6.5 : 10)} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
                   {label}
                 </text>
               );
