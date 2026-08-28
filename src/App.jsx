@@ -96,8 +96,8 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState('');   // 'YYYY' - 데이터가 존재하는 연도 중에서만 선택
   const [rangeOrders, setRangeOrders] = useState([]);      // 월단위/연단위 조회 시 그 기간에 해당하는 주문 전체
   const [drillDownDate, setDrillDownDate] = useState(null); // 월단위 추이 차트에서 클릭한 특정 일자 (조회 전용)
-  const [monthlyChartDaysMode, setMonthlyChartDaysMode] = useState('all'); // 월단위 추이 차트 - 'all'(전체일 조회) | 'salesOnly'(매출일만 조회)
-  const [showChartValues, setShowChartValues] = useState(false); // 추이 차트 점 위에 금액 숫자를 함께 표시할지 여부
+  const [monthlyChartDaysMode, setMonthlyChartDaysMode] = useState('salesOnly'); // 월단위 추이 차트 - 'all'(전체일 조회) | 'salesOnly'(매출일만 조회)
+  const [showChartValues, setShowChartValues] = useState(true); // 추이 차트 점 위에 금액 숫자를 함께 표시할지 여부
 
   const [editingOrderModal, setEditingOrderModal] = useState(null);
 
@@ -1678,21 +1678,41 @@ export default function App() {
                     <polyline key={si} points={seg.join(' ')} fill="none" stroke={color} strokeWidth={name === '전체' ? 2.5 : 1.8} strokeLinejoin="round" strokeLinecap="round" />
                   ))}
                   {data.map((d, i) => hasData[d.key][name] && (
-                    <React.Fragment key={d.key}>
-                      <circle
-                        cx={xFor(i)}
-                        cy={yFor(totals[d.key][name])}
-                        r={name === '전체' ? 3.2 : 2.2}
-                        fill={color}
-                      >
-                        <title>{`${d.label} · ${name} · ${totals[d.key][name].toLocaleString()}원`}</title>
-                      </circle>
-                      {showChartValues && (
-                        <text x={xFor(i)} y={yFor(totals[d.key][name]) - 6} textAnchor="middle" fontSize="9" fontWeight="bold" fill={color}>
-                          {totals[d.key][name].toLocaleString()}
-                        </text>
-                      )}
-                    </React.Fragment>
+                    <circle
+                      key={d.key}
+                      cx={xFor(i)}
+                      cy={yFor(totals[d.key][name])}
+                      r={name === '전체' ? 3.2 : 2.2}
+                      fill={color}
+                    >
+                      <title>{`${d.label} · ${name} · ${totals[d.key][name].toLocaleString()}원`}</title>
+                    </circle>
+                  ))}
+                </g>
+              );
+            })}
+            {/* 금액 라벨은 시리즈별로 따로 그리면 값이 비슷한 여러 시리즈의 숫자가 서로 겹칠 수 있어서,
+                같은 날짜(x)에 있는 모든 시리즈의 라벨을 화면상 위에서 아래 순서로 정렬한 뒤, 최소 간격(minGap)을
+                두고 겹치지 않게 세로로 살짝씩 밀어서 배치한다. */}
+            {showChartValues && data.map((d, i) => {
+              const points = visibleSeries
+                .filter(name => hasData[d.key][name])
+                .map(name => ({ name, color: seriesColor(name), value: totals[d.key][name], y: yFor(totals[d.key][name]) }))
+                .sort((a, b) => a.y - b.y);
+              const minGap = 11;
+              let prevY = null;
+              const labeled = points.map(p => {
+                let labelY = p.y - 6;
+                if (prevY !== null && labelY < prevY + minGap) labelY = prevY + minGap;
+                prevY = labelY;
+                return { ...p, labelY };
+              });
+              return (
+                <g key={`val-${d.key}`}>
+                  {labeled.map(p => (
+                    <text key={p.name} x={xFor(i)} y={p.labelY} textAnchor="middle" fontSize="9" fontWeight="bold" fill={p.color}>
+                      {p.value.toLocaleString()}
+                    </text>
                   ))}
                 </g>
               );
