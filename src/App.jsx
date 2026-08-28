@@ -1594,7 +1594,8 @@ export default function App() {
     const seriesColor = (name) => name === '전체' ? '#1e293b' : getStoreColor(name).text;
 
     const useMobileLayout = clickable && isMobile;
-    const W = Math.max(320, data.length * 32);
+    // 일단위(월간 상세) 라벨은 "13(수)"처럼 요일이 붙어 글자가 길어지므로, 겹치지 않도록 칸 폭을 더 넓게 잡는다.
+    const W = Math.max(320, data.length * (isDailyKey ? 52 : 32));
     const H = 200;
     const padX = 16, padTop = 14, padBottom = 30;
     const plotW = W - padX * 2, plotH = H - padTop - padBottom;
@@ -1705,17 +1706,21 @@ export default function App() {
               />
             )}
             {data.map((d, i) => {
-              // d.key가 "YYYY-MM-DD" 형태(일단위)일 때만 요일에 맞춰 색을 다르게 준다 (연단위 월별 라벨은 항상 기본색).
+              // d.key가 "YYYY-MM-DD" 형태(일단위)일 때만 요일에 맞춰 색을 다르게 주고, 라벨에도 "13(수)"처럼 요일을 함께 표기한다
+              // (연단위 월별 라벨은 항상 기본색, 요일 표기 없음).
               let color = '#94a3b8';
+              let label = d.label;
               if (isDailyKey) {
                 const [yy, mm, dd] = d.key.split('-').map(Number);
                 const weekday = new Date(yy, mm - 1, dd).getDay();
                 color = weekday === 0 ? '#dc2626' : weekday === 6 ? '#2563eb' : '#94a3b8';
+                const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
+                label = `${d.label}(${weekdayNames[weekday]})`;
               }
               const isSelected = clickable && selectedKey === d.key;
               return (
-                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={data.length > 20 ? 6.5 : 10} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
-                  {d.label}
+                <text key={d.key} x={xFor(i)} y={H - padBottom + 16} textAnchor="middle" fontSize={isDailyKey ? (data.length > 20 ? 13 : 20) : (data.length > 20 ? 6.5 : 10)} fontWeight={isSelected ? 'bold' : 'normal'} fill={isSelected ? '#2563eb' : color}>
+                  {label}
                 </text>
               );
             })}
